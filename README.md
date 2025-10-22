@@ -2,6 +2,8 @@
 
 This repository contains tools for direct digitalization from WAV files of various retro platforms.
 
+Current Tools: Maťo, ZX81 Fastsaver
+
 ### License
 
 MIT license
