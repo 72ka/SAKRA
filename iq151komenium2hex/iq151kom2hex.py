@@ -15,6 +15,7 @@ import warnings
 import matplotlib.pyplot as plt
 import numpy as np
 import glob
+import scipy.io.wavfile as wav
 from scipy.io import wavfile
 from scipy.io.wavfile import WavFileWarning
 from scipy.signal import butter, filtfilt
@@ -910,13 +911,6 @@ def export_to_report(blocks, kblocks, sr, vystupni_txt):
     except Exception as e:
         log(f"[ERROR] Nepodařilo se zapsat report: {e}")
         return False
-        
-import numpy as np
-import scipy.io.wavfile as wav
-import os
-
-import numpy as np
-import scipy.io.wavfile as wav
 
 def export_to_wav(crossings, start, end, T, vystupni_wav, samplerate=44100):
     """
