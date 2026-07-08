@@ -4,7 +4,7 @@
 Převodník magnetofonových záznamů počítače IQ-151 (systém Komenium) na formát HEX a WAv.
 Výsledný .hex soubor slouží pro přímé použití v modulu SD-ROM se zachováním load obrazovky
 
-verze 1.6
+verze 1.7
 
 Autor: (c) Jan Heřman 2026 <2hp@seznam.cz>
 """
@@ -20,6 +20,23 @@ from scipy.io import wavfile
 from scipy.io.wavfile import WavFileWarning
 from scipy.signal import butter, filtfilt
 from tqdm import tqdm
+
+# Přesměrování logování i do souboru
+class Tee(object):
+    def __init__(self, *files):
+        self.files = files
+    def write(self, obj):
+        for f in self.files:
+            f.write(obj)
+            f.flush()
+    def flush(self):
+        for f in self.files:
+            f.flush()
+
+input_path = sys.argv[1]
+log_filename = os.path.splitext(input_path)[0] + ".log"
+log_file = open(log_filename, "w", encoding="utf-8")
+sys.stdout = Tee(sys.stdout, log_file)
 
 # Ignorování specifických varování knihovny SciPy ohledně nestandardních chunků ve WAV souborech
 warnings.simplefilter("ignore", WavFileWarning)
@@ -510,6 +527,49 @@ def hrana(T):
     audio_samples.extend([stav] * int(T))
     stav = AMP_LOW if stav == AMP_HIGH else AMP_HIGH
 
+def find_sync(crossings, T, start_crossing):
+    """
+    Hledá na kazetě unifikovanou synchronizační sekvenci (pilot a dvojtečku).
+    Využívá posuvný registr a vrací index nálezu a zjištěnou polaritu fáze.
+    """
+    cbit = 1
+    syncbits = "111111111111111111111111001011101"
+    syncbits_inv = "".join('1' if b == '0' else '0' for b in syncbits)
+    
+    len_1 = int(2 * T)
+    threshold = len_1 * 0.75
+    
+    with tqdm(total=len(crossings), initial=start_crossing, desc="Hledám HEX bloky: ", leave=False) as pbar:
+        while (start_crossing + len(syncbits)) < len(crossings):
+            i = start_crossing
+            bits = []
+            current_bit = cbit
+            
+            while len(bits) < len(syncbits):
+                dt = crossings[i+1]['index'] - crossings[i]['index']
+                if dt > threshold:
+                    current_bit ^= 1
+                    bits.append({'index': crossings[i+1]['index'], 'bit': current_bit})
+                    i += 1
+                else:
+                    bits.append({'index': crossings[i+1]['index'], 'bit': current_bit})
+                    i += 2 
+
+            bits_string = "".join(str(b['bit']) for b in bits)
+
+            if bits_string == syncbits:
+                print("[OK] Nalezen začátek bloku NORMAL polarita")
+                return i-12, 1               
+            elif bits_string == syncbits_inv:
+                print("[OK] Nalezen začátek bloku INVERT polarita")
+                return i-12, 0
+            else:
+                start_crossing += 1
+                pbar.update(1)
+                
+    print("[INFO] Do konce nahrávky žádný další blok... Konec")
+    return i, cbit
+    
 def najdi_pilotni_ton(crossings, T, crossing_index, pocet):
     """
     Vyhledává synchronizační pilotní tón pásky. Jakmile identifikuje 
@@ -1008,9 +1068,8 @@ def convert_iq151_komenium(input_path, filt=False, visu=False, ampl=False, der=F
     # 4. Výpočet základní periody (T)
     T = analyze(crossings)
     
-    # Najeď za dlouhý pilotní tón a potlačí špatný pilot na začátku kazety
-    crossing_index, ispilot = najdi_pilotni_ton(crossings, T, crossing_index, 300)
-    afterpilot = crossing_index
+    # Hledání kousku pilotního tónu a znaku : jako začátek pro zpracování bloku
+    crossing_index, polarita = find_sync(crossings, T, 0)
     
     # 5. Smyčka pro čtení Standardních zaváděcích bloků
     blk_valid = True 
@@ -1018,18 +1077,6 @@ def convert_iq151_komenium(input_path, filt=False, visu=False, ampl=False, der=F
         print(f"[OK] Zpracovávám blok: {current_block}, index: {crossing_index}")
         blocks, crossing_index, blk_valid = cti_blok(crossings, T, crossing_index, blocks, current_block)
         current_block += 1
-    
-    if not blocks:
-        print("[INFO] Nic jsem nanašel, obracím polaritu a zkouším znova.")
-        blocks = []
-        current_block = 0
-        polarita ^= 1
-        crossing_index = afterpilot
-        blk_valid = True 
-        while (crossing_index < len(crossings)) and blk_valid:
-            print(f"[OK] Zpracovávám blok: {current_block}, index: {crossing_index}")
-            blocks, crossing_index, blk_valid = cti_blok(crossings, T, crossing_index, blocks, current_block)
-            current_block += 1
         
     if not blocks:
         print("[INFO] Na nahrávce nebyly nalezeny žádné platné datové bloky!")
@@ -1133,7 +1180,7 @@ if __name__ == "__main__":
         print("-------------------------------------------------------------")
         print("           Převodník IQ151 Komenium kazet na HEX a WAV")
         print("            (c) Jan Heřman 2026, 2hp@seznam.cz")
-        print("                       verze 1.6")
+        print("                       verze 1.7")
         print("-------------------------------------------------------------")
         print("Použití: python iq151kom2hex.py vstup.wav [-f -v -a -d]")
         print("Pozn. Umí i dávkově zpracovat adresář")
