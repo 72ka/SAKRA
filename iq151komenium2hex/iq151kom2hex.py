@@ -4,8 +4,6 @@
 Převodník magnetofonových záznamů počítače IQ-151 (systém Komenium) na formát HEX a WAv.
 Výsledný .hex soubor slouží pro přímé použití v modulu SD-ROM se zachováním load obrazovky
 
-verze 1.7
-
 Autor: (c) Jan Heřman 2026 <2hp@seznam.cz>
 """
 
@@ -21,6 +19,9 @@ from scipy.io.wavfile import WavFileWarning
 from scipy.signal import butter, filtfilt
 from tqdm import tqdm
 
+__version__ = "1.9"
+__author__ = "Jan Heřman"
+
 # Přesměrování logování i do souboru
 class Tee(object):
     def __init__(self, *files):
@@ -32,11 +33,6 @@ class Tee(object):
     def flush(self):
         for f in self.files:
             f.flush()
-
-input_path = sys.argv[1]
-log_filename = os.path.splitext(input_path)[0] + ".log"
-log_file = open(log_filename, "w", encoding="utf-8")
-sys.stdout = Tee(sys.stdout, log_file)
 
 # Ignorování specifických varování knihovny SciPy ohledně nestandardních chunků ve WAV souborech
 warnings.simplefilter("ignore", WavFileWarning)
@@ -60,6 +56,9 @@ AMP_SILENCE = 0
 stav = AMP_SILENCE
         
 audio_samples = []
+crossings = []
+pgmblocks = []
+pgmkblocks = []
 
 def log(text):
     """Pomocná funkce pro barevné printování do terminálu podle typu hlášky."""
@@ -82,6 +81,18 @@ def vizualizuj_wav_a_bloky(data, sr, blocks, wav_filename, base_name):
     """
     Vykreslí waveform WAV s popisky bloků
     """
+    vsechny_bloky = []
+    
+    for pgm in range(len(blocks)):
+        aktualni_blocks = blocks[pgm]
+        #aktualni_kblocks = kblocks[pgm]
+        
+        # Přidáme je za sebe do celkového seznamu
+        vsechny_bloky.extend(aktualni_blocks)
+    
+    blocks = vsechny_bloky
+            
+            
     pngfilename = f"{base_name}.png"
     print(f"[OK] Generuji vizualizaci do {pngfilename}...")
     
@@ -498,9 +509,10 @@ def check_crc(hex_data):
     Využívá algoritmus CheckSum8 2's Complement.
     """
     hex_data = hex_data.strip()
-    header_crc = int(hex_data[-2:], 16)
+    
     
     try:
+        header_crc = int(hex_data[-2:], 16)
         bytes_list = [int(hex_data[i:i+2], 16) for i in range(0, len(hex_data) - 2, 2)]
     except ValueError:
         log(f"[ERROR] CRC kontrola: Neplatný hex formát v bloku: {hex_data}")
@@ -533,14 +545,16 @@ def find_sync(crossings, T, start_crossing):
     Využívá posuvný registr a vrací index nálezu a zjištěnou polaritu fáze.
     """
     cbit = 1
-    syncbits = "111111111111111111111111001011101"
+    syncbits =  "111111111111111111111111001011101" #:
     syncbits_inv = "".join('1' if b == '0' else '0' for b in syncbits)
+    ksyncbits = "000000000000000000000010001001100" #L
+    ksyncbits_inv = "".join('1' if b == '0' else '0' for b in ksyncbits)
     
     len_1 = int(2 * T)
     threshold = len_1 * 0.75
     
-    with tqdm(total=len(crossings), initial=start_crossing, desc="Hledám HEX bloky: ", leave=False) as pbar:
-        while (start_crossing + len(syncbits)) < len(crossings):
+    with tqdm(total=len(crossings), initial=start_crossing, desc="Hledám bloky: ", leave=False) as pbar:
+        while (start_crossing + len(syncbits)) < (len(crossings) - len(syncbits)):
             i = start_crossing
             bits = []
             current_bit = cbit
@@ -558,17 +572,23 @@ def find_sync(crossings, T, start_crossing):
             bits_string = "".join(str(b['bit']) for b in bits)
 
             if bits_string == syncbits:
-                print("[OK] Nalezen začátek bloku NORMAL polarita")
-                return i-12, 1               
+                print("[OK] Nalezen začátek HEX bloku NORMAL polarita ", crossings[i]['index'])
+                return i-12, 1, ":"               
             elif bits_string == syncbits_inv:
-                print("[OK] Nalezen začátek bloku INVERT polarita")
-                return i-12, 0
+                print("[OK] Nalezen začátek HEX bloku INVERT polarita ", crossings[i]['index'])
+                return i-12, 0, ":"
+            elif bits_string == ksyncbits:
+                print("[OK] Nalezen začátek KOMENIUM bloku NORMAL polarita ", crossings[i]['index'])
+                return i, 1, "L"
+            elif bits_string == ksyncbits_inv:
+                print("[OK] Nalezen začátek KOMENIUM bloku INVERT polarita ", crossings[i]['index'])
+                return i, 0, "L"
             else:
                 start_crossing += 1
                 pbar.update(1)
                 
     print("[INFO] Do konce nahrávky žádný další blok... Konec")
-    return i, cbit
+    return len(crossings)-1, 1, None
     
 def najdi_pilotni_ton(crossings, T, crossing_index, pocet):
     """
@@ -627,7 +647,6 @@ def cti_blok(crossings, T, crossing_index, blocks, current_block):
     global polarita
     
     current_byte = 0
-    crossing_index, ispilot = najdi_pilotni_ton(crossings, T, crossing_index, 20)
     
     startcbit = polarita
     
@@ -698,26 +717,16 @@ def cti_komenium_blok(crossings, T, crossing_index, blocks, current_block, typ):
     """
     global polarita
     current_byte = 0
-    crossing_index, ispilot = najdi_pilotni_ton(crossings, T, crossing_index, 20)
-    if ispilot is False:
-            return blocks, crossing_index, False
     cbit = polarita 
-    
-    while current_byte != 0x4C:
-        current_byte, next_crossing, end_byte_crossing, cbit, sample = kcrossings_to_char(crossings, T, crossing_index, cbit)
-        if current_byte is False:
-            return blocks, end_byte_crossing, False
-        char = chr(current_byte)
-        start_sample = crossings[crossing_index]['index']
-        crossing_index = next_crossing
         
     if typ != 999:    
         print("[OK] Nalezen začátek bloku Komenium dat typ ", typ)
     else:
         print("[OK] Nalezen začátek NEZNAMEHO typu bloku Komenium dat")
-
+        
+    start_sample = crossings[crossing_index]['index']
+    
     blocks.append({'id': current_block, 'typ': typ, 'header': [], 'data': [], 'start_index': crossing_index, 'start_sample': start_sample})
-    crossing_index = end_byte_crossing
     
     current_byte = 0 
     header = []
@@ -754,9 +763,6 @@ def cti_komenium_blok(crossings, T, crossing_index, blocks, current_block, typ):
     blocks[-1]['end_index'] = end_byte_crossing
     blocks[-1]['end_sample'] = crossings[end_byte_crossing]['index']
     
-    #if typ == 2:
-    #    kblk_valid = kontrola_crc_komenium_typ2(kblk_data)
-    #else: 
     kblk_valid = kontrola_crc_komenium(kblk_data, header)
     
     return blocks, end_byte_crossing, kblk_valid
@@ -833,7 +839,34 @@ def index_time(crossing_index, samplerate):
 
     return f"{total_minutes:02d}:{seconds:06.3f}"
     
-
+def export_to_standard_iq151_hex(blocks, vystupni_soubor):
+    """
+    Vyexportuje shromážděná normální data do textového souboru standardu Intel HEX.
+    Je to v případě že se nejedná o Komenium kazetu.
+    """
+   
+    with open(vystupni_soubor, "w", encoding="utf-8") as f:
+        print(f"Zahajuji export Standard bloků do: {vystupni_soubor}")
+        
+        for index, block in enumerate(blocks):
+            if 'data' not in block or not block['data']:
+                header = "".join(z for z in block['header'])
+            
+                print(f" -> Exportuji Standard hlavičkový blok {index}")
+                
+                f.write(f":{header}\n")
+            else:
+                
+                header = "".join(z for z in block['header'])
+                data = "".join(z for z in block['data'])
+            
+                print(f" -> Exportuji Standard blok {index}: Délka {len(data)} bajtů")
+                
+                f.write(f":{header}{data}\n")
+        
+    print(f"[OK] Export úspěšně dokončen do {vystupni_soubor}.")
+    return True
+        
 def export_to_intel_hex(blocks, vystupni_soubor, bajtu_na_radek):
     """
     Vyexportuje shromážděná Komenium data do textového souboru standardu Intel HEX.
@@ -914,7 +947,6 @@ def export_to_report(blocks, kblocks, sr, vystupni_txt):
     try:
         print(f"[INFO] Generuji textový report do: {vystupni_txt}")
         
-        #nazev = vystupni_txt[:-4]
         nazev = ""
         
         # Hlavička přesně podle poslaného vzoru (oddělená tabulátory)
@@ -923,8 +955,19 @@ def export_to_report(blocks, kblocks, sr, vystupni_txt):
         with open(vystupni_txt, "w", encoding="utf-8") as f:
             f.write(hlavicka)
             
-            # Sloučíme oba seznamy bloků do jednoho pro postupné zpracování
-            vsechny_bloky = blocks + kblocks
+           # 1. Inicializujeme prázdný seznam pro úplně všechny bloky z celé kazety
+            vsechny_bloky = []
+            
+            # 3. Projdeme programy jeden po druhém a přesně za sebe složíme jejich blocks a kblocks
+            for pgm in range(len(blocks)):
+                aktualni_blocks = blocks[pgm]
+                if pgm in kblocks:
+                   aktualni_kblocks = kblocks[pgm]
+                else:
+                   aktualni_kblocks = []
+                
+                # Přidáme je za sebe do celkového seznamu
+                vsechny_bloky.extend(aktualni_blocks + aktualni_kblocks)
             
             for idx, block in enumerate(vsechny_bloky):
                 # Výpočet časů pomocí tvé stávající funkce
@@ -977,8 +1020,9 @@ def export_to_wav(crossings, start, end, T, vystupni_wav, samplerate=44100):
     Vygeneruje čistý WAV soubor na základě pole průchodů (crossings).
     Rekonstruuje perfektní obdélníkový signál mezi indexy start a end.
     """
-
-    print(f"[INFO] Generuji čistý WAV z průchodů: {vystupni_wav}")
+    od = crossings[start]['index']
+    do = crossings[end]['index']
+    print(f"[INFO] Generuji čistý WAV z průchodů: {vystupni_wav}, OD: {od} DO: {do} vzorku")
     
     # Definice amplitud pro 16-bit PCM (-32768 až 32767)
     AMP_HIGH = 24000
@@ -987,7 +1031,7 @@ def export_to_wav(crossings, start, end, T, vystupni_wav, samplerate=44100):
     
     audio_samples = []
     
-    # 1. Úvodní ticho před blokem (cca 1 sekunda)
+    # Úvodní ticho před blokem (cca 1 sekunda)
     audio_samples.extend([AMP_SILENCE] * int(samplerate * 1.0))
     
     # Vytáhneme si pouze ten úsek průchodů, který nás zajímá
@@ -1025,7 +1069,7 @@ def export_to_wav(crossings, start, end, T, vystupni_wav, samplerate=44100):
         # Překlopíme polaritu pro následující puls (střídání HIGH / LOW)
         aktualni_amplituda = AMP_LOW if aktualni_amplituda == AMP_HIGH else AMP_HIGH
         
-    # 2. Závěrečné ticho po bloku (cca 1.5 sekundy pro uložení v IQ-151)
+    # Závěrečné ticho po bloku (cca 1.5 sekundy pro uložení v IQ-151)
     audio_samples.extend([AMP_SILENCE] * int(samplerate * 1.5))
     
     # Převod na NumPy pole se správným datovým typem (int16)
@@ -1042,146 +1086,182 @@ def convert_iq151_komenium(input_path, filt=False, visu=False, ampl=False, der=F
     Hlavní orchestrátor celého převodu. Zajišťuje sekvenční průchod fázemi:
     Načtení audio signálu -> Filtrace -> Extrakce hran -> Načtení zavaděče -> Extrakce dat -> Export.
     """
-    blocks = []
-    kblocks = []
-    current_block = 0
+    
     global chyba_crc_pocet
     global polarita
+    global crossings
+    global pgmblocks
+    global pgmkblocks
+    
+    #Natvrdo sample rate pro export do wav
+    samplerate=44100
 
-    # 1. Načtení a příprava nahrávky
+    # Načtení a příprava nahrávky
     data, sr_local = process_wav(input_path)
     
-    # 2. Filtrace v případě aktivního přepínače
+    # Filtrace v případě aktivního přepínače
     if filt:
         data = filtr(data, sr_local)       
-	
-    # 3. Sběr hran (klasicky vs. amplitudové špičky)
+    
+    # Sběr hran (klasicky vs. amplitudové špičky)
     if ampl:
         crossings = detect_crossings_amplitude(data)
     elif der:
         crossings = detect_crossings_dynamic_derivative(data)
     else:
         crossings = detect_crossings(data)
-
+    
     program = 0
     
-    # 4. Výpočet základní periody (T)
+    # Výpočet základní periody (T)
     T = analyze(crossings)
     
-    # Hledání kousku pilotního tónu a znaku : jako začátek pro zpracování bloku
-    crossing_index, polarita = find_sync(crossings, T, 0)
+    # Najdi první výskyt hlavičky s dvojtečkou, další cykly jsou přvezaté z posledního hledání
+    crossing_index, polarita, byte = find_sync(crossings, T, crossing_index)
     
-    # 5. Smyčka pro čtení Standardních zaváděcích bloků
-    blk_valid = True 
-    while (crossing_index < len(crossings)) and blk_valid:
-        print(f"[OK] Zpracovávám blok: {current_block}, index: {crossing_index}")
-        blocks, crossing_index, blk_valid = cti_blok(crossings, T, crossing_index, blocks, current_block)
-        current_block += 1
-        
-    if not blocks:
-        print("[INFO] Na nahrávce nebyly nalezeny žádné platné datové bloky!")
-        return
-        
-    
-    cas = index_time(blocks[-1]['end_sample'], sr_local)
-    print("[INFO] Konec Standardních bloků na: ", cas)
-    
-    crossing_index = blocks[-1]['end_index']
-    
-    #podle vstupni adresy loaderu rozeznám typ Komenium loaderu   
-    vstupniaddr = "".join(blocks[-1]['header'])[2:6]
-    
-    if vstupniaddr == "7934":
-        typ = 1 #delka hlavy 4
-    elif vstupniaddr == "3FAE":
-        typ = 1 
-    elif vstupniaddr == "7934":
-        typ = 2 #delka hlavy 5
-    elif vstupniaddr == "7AE2":
-        typ = 1
-    elif vstupniaddr == "7010":
-        typ = 1
-    elif vstupniaddr == "0226":
-        typ = 2
-    elif vstupniaddr == "7A6B":
-        typ = 2
-    elif vstupniaddr == "024D":
-        typ = 2
-    else:
-        typ = 999
+    while crossing_index < len(crossings):
 
+        blocks = []
+        kblocks = []
+        current_block = 0
+        
+        # Smyčka pro čtení Standardních zaváděcích bloků
+        blk_valid = True 
+        while (crossing_index < len(crossings)) and blk_valid and (byte == ":"):
+            print(f"[OK] Zpracovávám blok: {current_block}, index: {crossing_index}")
+            blocks, crossing_index, blk_valid = cti_blok(crossings, T, crossing_index, blocks, current_block)
+            current_block += 1
+            
+        if not blocks:
+            print("[INFO] Na nahrávce nebyly nalezeny žádné platné datové bloky!")
+            break
+            
+        
+        cas = index_time(blocks[-1]['end_sample'], sr_local)
+        print("[INFO] Konec Standardních bloků na: ", cas)
+        
+        crossing_index = blocks[-1]['end_index']
+        
+        # podle vstupni adresy loaderu rozeznám typ Komenium loaderu   
+        vstupniaddr = "".join(blocks[-1]['header'])[2:6]
+        
+        #print(vstupniaddr)
+        
+        if vstupniaddr == "7934":
+            typ = 1 #delka hlavy 4
+        elif vstupniaddr == "3FAE":
+            typ = 1 
+        elif vstupniaddr == "7934":
+            typ = 2 #delka hlavy 5
+        elif vstupniaddr == "7AE2":
+            typ = 1
+        elif vstupniaddr == "7010":
+            typ = 1
+        elif vstupniaddr == "0226":
+            typ = 2
+        elif vstupniaddr == "7A6B":
+            typ = 2
+        elif vstupniaddr == "024D":
+            typ = 2
+        elif vstupniaddr == "605E":
+            typ = 2
+        else:
+            typ = 999
     
-    # 6. Smyčka pro čtení Komenium bloků s daty programu
-    """
-    Komenium ukládalo jako jeden blok loading screen a druhý blok data
-    Pro zamezení načítání nesmyslů za koncem hlavního datového bloku
-    tedy navíc omezím počet bloků na 2
-    """
+        
+        # 6. Smyčka pro čtení Komenium bloků s daty programu
+        """
+        Komenium ukládalo jako jeden blok loading screen a druhý blok data
+        Pro zamezení načítání nesmyslů za koncem hlavního datového bloku
+        tedy navíc omezím počet bloků na 2
+        """
+        
+        
+    
+        current_kblock = current_block
+        blk_valid = True
+        
+        while (crossing_index < len(crossings)) and blk_valid:
+            # Hledání kousku pilotního tónu a znaku L
+            crossing_index, polarita, byte = find_sync(crossings, T, crossing_index)
+            if byte == "L":
+                print(f"[OK] Zpracovávám Komenium blok: {current_kblock}, typ: {typ}, sample: {crossings[crossing_index]['index']}")
+                kblocks, crossing_index, blk_valid = cti_komenium_blok(crossings, T, crossing_index, kblocks, current_kblock, typ)
+                current_kblock += 1
+            else:
+                blk_valid = False
+        
+        # Oblast pro zpracování standard loader programů
+        if not kblocks:
+            log("[INFO] Nebyly nalezeny žádné Komenium bloky k exportu. Exportuji standard program.")
+            
+            if program > 0:
+                hexfilename = os.path.splitext(input_path)[0] + "_" + str(program) + ".hex"
+                clean_wav_filename = os.path.splitext(input_path)[0] + "_" + str(program) + "_clean.wav"
+            else:
+                hexfilename = os.path.splitext(input_path)[0] + ".hex"
+                clean_wav_filename = os.path.splitext(input_path)[0] + "_clean.wav"
+            program += 1
+            pgmblocks.append(blocks)
+            export_to_standard_iq151_hex(blocks, hexfilename)
+            export_to_wav(crossings, blocks[0]['start_index']-30, blocks[-1]['end_index']+200, samplerate/2000, clean_wav_filename)
+            continue
+        
+        elif chyba_crc_pocet > 0:
+            log("\n[INFO] ZÁPIS HEX SOUBORU ZRUŠEN! Nahrávka obsahuje chybu(y) v kontrolním součtu (CRC).")
+            program += 1
+            continue
+        
+        else:
+            # Uložení výsledného souboru Intel HEX
+            print("-" * 40)
+            pgmkblocks.append(kblocks)
+            pgmblocks.append(blocks)
+            if program > 0:
+                hexfilename = os.path.splitext(input_path)[0] + "_" + str(program) + ".hex"
+            else:
+                hexfilename = os.path.splitext(input_path)[0] + ".hex"
+            export_to_intel_hex(pgmkblocks[program], hexfilename, 80)
+            
+            
+        # Export nové wav
+        print("[OK] Generuji novou rekonstruovanou WAV nahrávku")
+        # Vytvoření názvu pro nový vyčištěný WAV
+        if program > 0:
+            clean_wav_filename = os.path.splitext(input_path)[0] + "_" + str(program) + "_clean.wav"
+        else:
+            clean_wav_filename = os.path.splitext(input_path)[0] + "_clean.wav"
+        
+        print("[INFO] Skoncili jsme na indexu: ", crossing_index, "CAS: ", index_time(crossings[crossing_index]['index'], sr_local))
+        
+        # Spuštění exportu zvuku zpět, natvrdo dělám 44,1KHz wav
+        export_to_wav(crossings, blocks[0]['start_index']-30, kblocks[-1]['end_index']+30, samplerate/2000, clean_wav_filename)
 
-    current_kblock = current_block
-    blk_valid = True
-    
-    while (crossing_index < len(crossings)) and blk_valid:
-        print(f"[OK] Zpracovávám Komenium blok: {current_kblock}, typ: {typ}, sample: {crossings[crossing_index]['index']}")
-        kblocks, crossing_index, blk_valid = cti_komenium_blok(crossings, T, crossing_index, kblocks, current_kblock, typ)
-        current_kblock += 1
-    
-    if not kblocks:
-        log("[INFO] Nebyly nalezeny žádné Komenium bloky k exportu.")
-    
-    elif chyba_crc_pocet > 0:
-        log("\n[INFO] ZÁPIS HEX SOUBORU ZRUŠEN! Nahrávka obsahuje chybu(y) v kontrolním součtu (CRC).")
-    
-    else:
-        # 7. Uložení výsledného souboru Intel HEX
-        print("-" * 40)
-        hexfilename = os.path.splitext(input_path)[0] + ".hex"
-        export_to_intel_hex(kblocks, hexfilename, 80)
         program += 1
 
         
-    # 8. Vytvoří metadata do text souboru (oddělený tabulátory)
+    # Vytvoří metadata do text souboru (oddělený tabulátory)
     report_filename = os.path.splitext(input_path)[0] + ".txt"
-    export_to_report(blocks, kblocks, sr_local, report_filename)
+    export_to_report(pgmblocks, pgmkblocks, sr_local, report_filename)
     
-
-    # pokud tu nejsou Komenium bloky, uložíme standard HEX program, aby šel převodník použít    
-    if not kblocks and blocks:
-        log("[INFO] Standardní IQ151 nahrávka, takže jí uložím do HEX.")
-        # 7. Uložení výsledného souboru Intel HEX pro standardní program
-        print("-" * 40)
-        hexfilename = os.path.splitext(input_path)[0] + ".hex"
-        export_to_intel_hex(blocks, hexfilename, 80)
-        
-    # 9. Volitelná vizualizace do PNG grafu i v případě vadných bloků
+    # Volitelná vizualizace do PNG grafu i v případě vadných bloků
     if visu:
-        vsechny_bloky = blocks + kblocks
+        vsechny_bloky = pgmblocks + pgmkblocks
         vizualizuj_wav_a_bloky(data, sr_local, vsechny_bloky, sys.argv[1], os.path.splitext(input_path)[0])
-        
-        
-        
-    # 10. Export nové wav
-    print("[OK] Generuji novou rekonstruovanou WAV nahrávku")
-    # Vytvoření názvu pro nový vyčištěný WAV
-    clean_wav_filename = os.path.splitext(input_path)[0] + "_clean.wav"
-    
-    print("[INFO] Skoncili jsme na indexu: ", crossing_index, "CAS: ", index_time(crossings[crossing_index]['index'], sr_local))
-    
-    # Spuštění exportu zvuku zpět, natvrdo dělám 44,1KHz wav
-    samplerate=44100
-    export_to_wav(crossings, blocks[0]['start_index']-500, kblocks[-1]['end_index']+30, samplerate/2000, clean_wav_filename)
-    
+
     print("-" * 40)
     print("[OK] Konec")
+    
+    return crossing_index
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("-------------------------------------------------------------")
+        print("=" * 60)
         print("           Převodník IQ151 Komenium kazet na HEX a WAV")
-        print("            (c) Jan Heřman 2026, 2hp@seznam.cz")
-        print("                       verze 1.7")
-        print("-------------------------------------------------------------")
+        print(f"            (c) {__author__} 2026, 2hp@seznam.cz")
+        print(f"                       verze {__version__}")
+        print("=" * 60)
         print("Použití: python iq151kom2hex.py vstup.wav [-f -v -a -d]")
         print("Pozn. Umí i dávkově zpracovat adresář")
         print("Použití: python iq151kom2hex.py cesta/adresář ")
@@ -1193,6 +1273,10 @@ if __name__ == "__main__":
         print("-------------------------------------------------------------")
         print("Příklad: python iq151kom2hex.py nahravka.wav -v -a")
     else:
+        print("=" * 60)
+        print(f"        Převodník IQ151 Komenium kazet na HEX a WAV")
+        print(f"           (SAKRA Project) v{__version__} by {__author__}")
+        print("=" * 60)
         # Načtení tvých definovaných přepínačů
         filt_flag = "-f" in sys.argv
         visu_flag = "-v" in sys.argv
@@ -1224,6 +1308,7 @@ if __name__ == "__main__":
             pattern_upper = os.path.join(vstupni_cesta, "*.WAV")
             wav_soubory = glob.glob(pattern_lower) + glob.glob(pattern_upper)
             wav_soubory.sort()  # Abecední seřazení
+            wav_soubory = [f for f in wav_soubory if not f.lower().endswith("_clean.wav")]
         elif os.path.isfile(vstupni_cesta):
             wav_soubory = [vstupni_cesta]
         else:
@@ -1235,7 +1320,7 @@ if __name__ == "__main__":
             sys.exit(0)
 
         print(f"[INFO] Nalezeno souborů ke zpracování: {len(wav_soubory)}")
-        print("=" * 60)
+        print("-" * 60)
 
         # Postupné hromadné zpracování nalezených souborů
         for index, aktualni_wav in enumerate(wav_soubory, start=1):
@@ -1245,20 +1330,32 @@ if __name__ == "__main__":
             # Reset globální proměnné pro každý soubor znovu, aby předchozí chyba nezablokovala další soubor
             chyba_crc_pocet = 0
             
+            puvodni_stdout = sys.stdout
+            log_file = None
+            
             try:
-                # Volání tvé funkce s předanými přepínači
-                convert_iq151_komenium(
+                log_filename = os.path.splitext(aktualni_wav)[0] + ".log"
+                
+                # 2. Otevřu log
+                log_file = open(log_filename, "w", encoding="utf-8")
+                sys.stdout = Tee(puvodni_stdout, log_file)
+                next_index = 0
+                next_index = convert_iq151_komenium(
                     aktualni_wav, 
                     filt=filt_flag, 
                     visu=visu_flag, 
                     ampl=amplitude_flag, 
                     der=der_flag,
-                    crossing_index=start_index_val
+                    crossing_index=next_index
                 )
             except Exception as e:
-                log(f"[ERROR] Soubor {os.path.basename(aktualni_wav)} selhal na neošetřenou chybu: {e}")
+                log(f"[ERROR] Soubor {os.path.basename(aktualni_wav)} se mi nepodařilo vůbec zpracovat.")
                 print("Pokračuji na další soubor v pořadí...")
-                
+            finally:
+                if log_file is not None:
+                    sys.stdout = puvodni_stdout
+                    log_file.close()
+            
         print("\n=============================================================")
         print("[OK] Zpracování dokončeno.")
         print("=============================================================")

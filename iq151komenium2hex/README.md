@@ -10,7 +10,8 @@ Výsledný `.hex` soubor je optimalizován pro přímé použití v emulátorech
 *   **Pásmová filtrace:** Integrovaný Butterworthův filtr pro odstranění síťového brumu (300 Hz) a vysokofrekvenčního šumu (5 kHz).
 *   **Dávkové zpracování:** Možnost zpracovat buď jeden soubor, nebo rovnou celý adresář plný nahrávek.
 *   **Vizualizace:** Generování přehledného `.png` grafu s časovou osou a barevně vyznačenými datovými bloky.
-*   **Generování reportů:** Export metadat kompatibilních s textovými reporty (tab-delimited).
+*   **Generování reportů:** Export metadat kompatibilních s textovými reporty (tab-delimited). Export log záznamu.
+*   **Zpracování běžných kazet:** Dokáže získat i data pomocí normálního loaderu
 
 ## Požadavky a instalace
 
