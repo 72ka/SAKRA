@@ -2,7 +2,7 @@
 
 This repository contains tools for direct digitalization from WAV files of various retro platforms.
 
-Current Tools: Maťo, ZX81 Fastsaver, IQ151 Komenium, SAPI-1
+Current Tools: Maťo, ZX81 Fastsaver, IQ151 (Komenium), SAPI-1 (Mikos), PMD 85
 
 ### License
 
