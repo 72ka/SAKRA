@@ -25,6 +25,9 @@ from tqdm import tqdm
 __version__ = "1.0"
 __author__ = "Jan Heřman"
 
+# Globalni práh pro rozhodovani
+prah = 0.75
+
 # Přesměrování logování i do souboru
 class Tee(object):
     def __init__(self, *files):
@@ -151,7 +154,7 @@ def crossings_to_byte(crossings, T, start_crossing, cbit):
     Čte proud surových biphase dat z průchodů hran a skládá je posuvem do bajtů.
     """
     len_1 = int(2 * T)
-    threshold = len_1 * 0.75
+    threshold = len_1 * prah
     
     bits = []
     byte_val = 0
@@ -208,7 +211,7 @@ def find_sync(crossings, T, start_crossing):
     syncbits_inv = "".join('1' if b == '0' else '0' for b in syncbits)
     
     len_1 = int(2 * T)
-    threshold = len_1 * 0.75
+    threshold = len_1 * prah
     
     with tqdm(total=len(crossings), initial=start_crossing, desc="Hledám bloky: ", leave=False) as pbar:
         while (start_crossing + 2*len(syncbits)) < len(crossings):
@@ -424,7 +427,7 @@ def export_to_wav(crossings, start, end, T, vystupni_wav, samplerate=44100):
     aktualni_amplituda = AMP_HIGH
     
     len_1 = int(2 * T)   
-    threshold = len_1 * 0.75
+    threshold = len_1 * prah
     
     # Rekonstrukce pilotního tónu (1.5 sekundy)
     for i in range(int(samplerate / T * 1.5)):
@@ -639,8 +642,8 @@ def convert_pmd85(input_path, filt=False, visu=False):
     except Exception as e:
         if blocks: 
             blocks.pop()
-        print(f"[INFO] Přerušení nebo konec platného záznamu:", e)
-        traceback.print_exc()
+        print(f"[INFO] Přerušení nebo konec platného záznamu")
+        #traceback.print_exc()
         
     # Export všech bloků do PTP   
     export_to_ptp(blocks, os.path.splitext(input_path)[0]+".ptp")
@@ -710,7 +713,7 @@ if __name__ == "__main__":
                 next_index = 0
                 next_index = convert_pmd85(aktualni_wav, filt=filt_flag, visu=visu_flag)
             except Exception as e:
-                print(f"[INFO] Záznam nahrávky ukončen nebo neočekávaná chyba: {e}")
+                #print(f"[INFO] Záznam nahrávky ukončen nebo neočekávaná chyba: {e}")
                 print("Pokračuji na další soubor v pořadí...")
             finally:
                 if log_file is not None:
