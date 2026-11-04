@@ -20,6 +20,36 @@ The repository contains two things:
 
 ---
 
+## Screenshots
+
+**Workbench** – cassette overview, waveform of the side, pulses and length histogram, tape contents table and the
+selected program with its data blocks (green = OK, red = damaged).
+
+![Workbench](docs/screenshots/stul.png)
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/pruvodce3.png" alt="Wizard – platform step"><br>
+<b>Wizard</b> – six steps for volunteers. SAKRA shows which computers it found on the tape and confirms them
+with checksums; unrecognized sections can be played back and assigned by hand.</td>
+<td width="50%"><img src="docs/screenshots/platforma.png" alt="Which computer is the cassette for?"><br>
+<b>Which computer is the cassette for?</b> – choose it (only its decoders run, faster) or let SAKRA recognize
+it automatically. Every platform has its own icon.</td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/uprava_po.png" alt="Manual repair of a damaged block"><br>
+<b>Manual repair</b> – zoom in to single samples and add or remove a zero crossing; the block is decoded again
+at once and SAKRA tells when its checksum matches.</td>
+<td width="50%"><img src="docs/screenshots/davky.png" alt="Batch processing"><br>
+<b>Batch</b> – a queue of cassettes processed in the background; error-free ones go straight to the archive,
+the rest wait for a human check.</td>
+</tr>
+</table>
+
+The interface is available in **English and Czech**; the screenshots above are from the English version.
+
+---
+
 ## SAKRA application
 
 ### Supported platforms
@@ -134,6 +164,9 @@ archivu. Má tři režimy: Průvodce, Pracovní stůl a Dávky.
 
 Původní samostatné převodníky (PMD 85, Maťo, IQ 151, SAPI-1, ZX81) jsou ve složce `obsolete/`; aplikace je
 nahrazuje, ale fungují i samostatně.
+
+<p align="center"><img src="navod/obrazky/pruvodce3.png" alt="Průvodce – krok Platforma" width="80%"><br>
+<i>Česká verze – Průvodce, krok Platforma. Další snímky jsou v návodu (sakra/dokumenty/SAKRA-navod.pdf).</i></p>
 
 ## License
 

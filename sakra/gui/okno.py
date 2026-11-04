@@ -22,6 +22,7 @@ from ..balicek import bezpecne_jmeno, exportuj as exportuj_balicek
 from ..jadro.analyza import VysledekStrany, obnov_navrhy, prenes_rucni, znovu_dekoduj_blok
 from ..jadro.model import Kazeta, Zaznam, cas_text
 from ..jadro.pulzy import odeber_hranu, vloz_hranu
+from ..jadro.texty import pocet
 from ..metadata import excel
 from ..platformy import podle_id
 from ..projekt import PRIPONA, analyzuj_strany, cislo_strany, otevri, uloz, vloz_vysledky
@@ -633,14 +634,15 @@ class HlavniOkno(QMainWindow):
                                if radky else tr("<span style='color:#8A93A3'>–</span>"))
         programu = sum(1 for s in self.kazeta.strany for z in s.zaznamy if z.soubor is not None)
         self.nadpis_obsahu.setText(
-            tr("OBSAH KAZETY   <span style='font-weight:normal'>{0} souborů</span>").format(programu)
+            tr("OBSAH KAZETY   <span style='font-weight:normal'>{0}</span>").format(
+                pocet(programu, "soubor", "soubory", "souborů"))
         )
 
     def _obnov_strom(self):
         self._obnov_platformy()
         self.strom.clear()
         for s in self.kazeta.strany:
-            it = QTreeWidgetItem([tr("Strana {0}").format(s.cislo), tr("{0} položek").format(len(s.zaznamy))])
+            it = QTreeWidgetItem([tr("Strana {0}").format(s.cislo), pocet(len(s.zaznamy), "položka", "položky", "položek")])
             it.setData(0, Qt.ItemDataRole.UserRole, ("strana", s.cislo))
             f = it.font(0)
             f.setBold(True)

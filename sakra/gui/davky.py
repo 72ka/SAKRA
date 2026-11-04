@@ -117,7 +117,7 @@ class Zpracovani(QThread):
         p.chyb = sum(1 for _, z in zaznamy if z.stav == "chyba")
         p.platformy = sorted({podle_id(z.soubor.platforma).pocitac if podle_id(z.soubor.platforma) else z.platforma
                               for _, z in zaznamy if z.soubor})
-        p.k_kontrole = [f"{c}-{cas_text(z.cas_od)} {z.nazev}: " + {
+        p.k_kontrole = [f"{c}-{cas_text(z.cas_od)} {tr_data(z.nazev)}: " + {
             "chyba": tr("chyba čtení – ") + (tr_data(popis_stavu(z.soubor)) if z.soubor else ""),
             "nerozpoznáno": tr("úsek bez platformy (uložen jako CSW). Určit platformu?"),
             "neověřeno": tr("formát bez kontrolního součtu, ověřeno jen délkou")}[z.stav]

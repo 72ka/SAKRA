@@ -1,10 +1,12 @@
 """Snímky obrazovky pro návod: aplikace běží bez okna (offscreen) nad testovacími nahrávkami.
 
-Spuštění z kořene projektu:  python navod/snimky.py
+Spuštění z kořene projektu:  python navod/snimky.py                  (česky do navod/obrazky – pro návod)
+                             python navod/snimky.py --jazyk en --kam docs/screenshots   (pro README)
 Potřebuje skills/testdata/RH07860_v1 (ZX Spectrum) a HH08518 (2)_44kHz.wav (Ondra); nastavení uživatele nemění.
 """
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 import tempfile
@@ -25,6 +27,15 @@ SIRKA, VYSKA = 1360, 860
 
 
 def main() -> None:
+    global OBRAZKY
+    ap = argparse.ArgumentParser(description="Snímky obrazovky SAKRA")
+    ap.add_argument("--jazyk", choices=("cs", "en"), default="cs")
+    ap.add_argument("--kam", help="složka pro snímky (výchozí navod/obrazky)")
+    arg = ap.parse_args()
+    if arg.kam:
+        OBRAZKY = Path(arg.kam).resolve()
+    from sakra import i18n
+    i18n.nastav(arg.jazyk)                        # před načtením oken (texty modulů se vyhodnotí při importu)
     tmp = Path(tempfile.mkdtemp(prefix="sakra-navod-"))
     for f in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):     # nastavení uživatele zůstane netknuté
         QSettings.setPath(f, QSettings.Scope.UserScope, str(tmp / "nastaveni"))
@@ -34,10 +45,10 @@ def main() -> None:
     from sakra.gui.okno import HlavniOkno
     from sakra.gui.zahlavi import DialogNastaveni
     app.setWindowIcon(ikona())
-    _preklad_qt(app)                              # tlačítka Qt (Storno…) česky jako v aplikaci
+    _preklad_qt(app)                              # tlačítka Qt (Storno…) v jazyce aplikace
     n = vzhled.Nastaveni("svetle", "navrh", False)
     vzhled.pouzij(app, n)
-    OBRAZKY.mkdir(exist_ok=True)
+    OBRAZKY.mkdir(parents=True, exist_ok=True)
 
     def cekej(podminka, limit=300):
         konec = time.time() + limit
@@ -63,6 +74,11 @@ def main() -> None:
     p = o.pruvodce
     p.pridej_soubory([RH / "RH07860 (A).wav", RH / "RH07860 (B).wav"])
     uloz(o, "pruvodce1")
+    from sakra.gui.vyber_platformy import DialogPlatformy
+    dp = DialogPlatformy("ZX Spectrum")            # dotaz při otevření nové kazety
+    dp.show()
+    uloz(dp, "platforma")
+    dp.close()
     p.jdi(1)
     uloz(o, "pruvodce2")
     p.jdi(2)
@@ -151,6 +167,7 @@ def main() -> None:
     d.pridej([RH / "RH07860 (A).wav", RH / "RH07860 (B).wav", HH])
     d.spust()
     cekej(lambda: not d.bezi(), 900)
+    d.vystup.setText(str(Path.home() / "Archiv"))   # na snímku obvyklá cesta místo dočasné složky
     d.tabulka.selectRow(1)
     uloz(o, "davky")
     o.close()

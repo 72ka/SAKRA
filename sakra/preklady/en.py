@@ -75,8 +75,9 @@ TEXTY: dict[str, str] = {
     "PŘEHLED KAZETY": "CASSETTE OVERVIEW",
     "HISTOGRAM DÉLEK": "LENGTH HISTOGRAM",
     "OBSAH KAZETY": "CASSETTE CONTENTS",
-    "OBSAH KAZETY   <span style='font-weight:normal'>{0} souborů</span>":
-        "CASSETTE CONTENTS   <span style='font-weight:normal'>{0} files</span>",
+    "OBSAH KAZETY   <span style='font-weight:normal'>{0}</span>":
+        "CASSETTE CONTENTS   <span style='font-weight:normal'>{0}</span>",
+    "… celkem {0} B": "… {0} B in total",
     "PLATFORMY NA PÁSCE": "PLATFORMS ON THE TAPE",
     "VYBRANÝ SOUBOR": "SELECTED FILE",
     "Obsah pásky": "Tape contents",
@@ -106,7 +107,6 @@ TEXTY: dict[str, str] = {
     "zvuk": "sound",
     "bez chyby": "no error",
     "opraveno – ": "repaired – ",
-    "{0} položek": "{0} items",
     "{0:g} kHz · {1} · {2}": "{0:g} kHz · {1} · {2}",
     "{0:.0f} % jmenovité": "{0:.0f} % of nominal",
     # ------------------------------------------------------------ tabulka obsahu
@@ -487,6 +487,7 @@ TEXTY: dict[str, str] = {
     "strana": "side", "strany": "sides", "stran": "sides",
     "program": "program", "programy": "programs", "programů": "programs",
     "položka": "item", "položky": "items", "položek": "items",
+    "soubor": "file", "soubory": "files", "souborů": "files",
     "dekódovaný soubor": "decoded file", "dekódované soubory": "decoded files", "dekódovaných souborů": "decoded files",
     # ------------------------------------------------------------ hodnoty z dat (zobrazení)
     "ok": "OK",
@@ -575,7 +576,7 @@ VZORY: list = [
     (r"Obrácená polarita: (.+)", lambda m: _vnoreny(m, "Inverted polarity: {0}")),
     (r"Dekóduji: (.+)", r"Decoding: \1"),
     (r"chybí blok (.+)", r"missing block \1"),
-    (r"poškozený blok (.+)", r"damaged block \1"),
+    (r"poškozený blok (.+)", lambda m: "damaged block " + _v_sekundach(m.group(1))),
     (r"blok (v [\d.]+ s|\d+): (.+)", lambda m: "block " + m.group(1).replace("v ", "at ") + ": "
      + _vnoreny(m, "{1}")),
     (r"ruční úprava signálu \(\+(\d+)/−(\d+) přechodů\)", r"manual signal edit (+\1/−\2 crossings)"),
@@ -609,6 +610,12 @@ VZORY: list = [
     (r"Balím do 7z: (\d+) %", r"Packing into 7z: \1 %"),
     (r"(.) (.+)", lambda m: _typ_s_kodem(m)),
 ]
+
+
+def _v_sekundach(text: str) -> str:
+    """„v 299.1 s“ (čas bloku bez čísla) -> „at 299.1 s“."""
+    import re
+    return re.sub(r"\bv ([\d.]+) s\b", r"at \1 s", text)
 
 
 def _typ_s_kodem(m) -> str:

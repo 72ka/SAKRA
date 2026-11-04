@@ -39,5 +39,6 @@ def hex_vypis(data: bytes, adresa: int = 0, nejvic: int = 256) -> str:
         out.append(f"{(adresa + i) & 0xFFFF:04X}  " + " ".join(f"{b:02X}" for b in kus).ljust(48) + "  "
                    + "".join(chr(b) if 32 <= b < 127 else "." for b in kus))
     if len(data) > nejvic:
-        out.append(f"… celkem {len(data)} B")
+        from ..i18n import tr
+        out.append(tr("… celkem {0} B").format(len(data)))
     return "\n".join(out)
