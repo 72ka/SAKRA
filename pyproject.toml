@@ -1,0 +1,36 @@
+[project]
+name = "sakra"
+version = "0.3.0a1"
+description = "SAKRA (a Swiss Army Knife for Retrogaming Archaeologists) – digitalizace a archivace audiokazet s programy pro staré počítače, pro potřeby Herního archivu (www.herniarchiv.cz)"
+authors = [{ name = "Jan Heřman (72ka)", email = "2hp@seznam.cz" }]
+# program: PolyForm Noncommercial 1.0.0 (komerční použití jen se souhlasem autora); návod a logo: CC BY-NC 4.0
+readme = "README.md"
+license = { text = "PolyForm-Noncommercial-1.0.0" }
+requires-python = ">=3.11"
+dependencies = [
+    # PySide6 6.12.0 na Pythonu 3.11 při každém kreslení ubírá referenci na None -> pád aplikace
+    "PySide6-Essentials>=6.6,<6.12; python_version < '3.12'",
+    "PySide6-Essentials>=6.6; python_version >= '3.12'",
+    "numpy>=1.26",
+    "soundfile>=0.12",
+    "openpyxl>=3.1",
+    "py7zr>=0.20",          # archivní balíček jako jeden soubor .7z
+    "zx==0.13.15",          # emulátor ZX Spectra (snímky obrazovky); verze pevně, používá se jeho vnitřní API
+]
+
+[project.scripts]
+sakra = "sakra.__main__:main"
+
+[project.urls]
+"Repository" = "https://github.com/72ka/SAKRA"
+"Herní archiv" = "https://www.herniarchiv.cz"
+
+[tool.setuptools.package-data]
+sakra = ["dokumenty/*.pdf", "data/*.png"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["sakra*"]

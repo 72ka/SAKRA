@@ -1,0 +1,36 @@
+SAKRA – third-party components / knihovny třetích stran
+=======================================================
+
+SAKRA uses the following libraries. Each is distributed under its own license, which is not
+changed by the license of SAKRA. The built application (PyInstaller) contains these libraries
+as separate, replaceable files; their license texts are included in the build
+(folders *.dist-info, and the full GNU license texts in licence-knihoven/: LGPL-3.0.txt, GPL-3.0.txt,
+LGPL-2.1.txt) and are available from the project pages below.
+
+Library            License                                        Project
+-----------------  ---------------------------------------------  ------------------------------------------
+PySide6 / Qt 6     LGPL-3.0-only (or GPL-2.0/3.0)                 https://www.qt.io/qt-for-python
+shiboken6          LGPL-3.0-only (or GPL-2.0/3.0)                 https://www.qt.io/qt-for-python
+numpy              BSD-3-Clause (and 0BSD, MIT, Zlib, CC0-1.0)    https://numpy.org
+soundfile          BSD-3-Clause (uses libsndfile, LGPL-2.1)       https://github.com/bastibe/python-soundfile
+cffi               MIT-0                                          https://cffi.readthedocs.io
+openpyxl           MIT                                            https://openpyxl.readthedocs.io
+et_xmlfile         MIT                                            https://foss.heptapod.net/openpyxl/et_xmlfile
+zx                 MIT (ZX Spectrum emulator, Ivan Kosarev)       https://github.com/kosarev/zx
+                   includes the ZX Spectrum ROM – Amstrad plc allows its distribution with emulators
+py7zr              LGPL-2.1-or-later                              https://github.com/miurahr/py7zr
+pybcj, pyppmd,     LGPL-2.1-or-later                              https://github.com/miurahr
+inflate64,
+multivolumefile
+pyzstd             BSD-3-Clause                                   https://github.com/Rogdham/pyzstd
+brotli             MIT                                            https://github.com/google/brotli
+pycryptodomex      BSD / Public Domain                            https://www.pycryptodome.org
+texttable          MIT                                            https://github.com/foutaise/texttable
+psutil             BSD-3-Clause                                   https://github.com/giampaolo/psutil
+backports.zstd,    PSF-2.0                                        https://pypi.org
+typing_extensions
+Python             PSF-2.0                                        https://www.python.org
+
+LGPL components (Qt/PySide6, libsndfile, py7zr and its compression modules) are used as dynamically
+loaded libraries; you may replace them with your own modified versions. Their source code is available
+from the project pages above.

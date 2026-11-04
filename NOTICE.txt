@@ -1,0 +1,54 @@
+﻿SAKRA – a Swiss Army Knife for Retrogaming Archaeologists
+Copyright © 2025–2026 Jan Heřman (72ka) · https://github.com/72ka/SAKRA
+Made for the needs of Herní archiv (www.herniarchiv.cz).
+
+LICENSING
+=========
+
+Software (source code of the SAKRA application and the built application)
+    PolyForm Noncommercial License 1.0.0 – see LICENSE
+    https://polyformproject.org/licenses/noncommercial/1.0.0
+
+    Free for any noncommercial purpose: personal use, hobby, research, study, and use by
+    charitable organizations, educational institutions, public research organizations and
+    government institutions (e.g. archives, museums, schools).
+    Anyone who passes on the software or a changed version of it must keep the
+    "Required Notice" lines in LICENSE – i.e. keep the author credited.
+
+Manual and logo
+    Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)
+    – see LICENSE-CC-BY-NC-4.0.txt, https://creativecommons.org/licenses/by-nc/4.0/
+    Covers: the PDF manual (sakra/dokumenty/SAKRA-navod.pdf) with its texts and screenshots
+    (navod/obrazky/), the logo (sakra/data/logo.png) and the icon (sakra/data/ikona.png, instalator/sakra.ico).
+    Attribution: "Jan Heřman (72ka), SAKRA".
+
+Commercial use
+    Any commercial use (selling, paid services, use inside a commercial product or by a company
+    for commercial purposes) needs a separate written license from the author.
+    Contact: 2hp@seznam.cz
+
+Third-party components
+    SAKRA uses libraries under their own licenses – see THIRD-PARTY-NOTICES.txt.
+    Their licenses are not changed by the licenses above.
+
+---------------------------------------------------------------------------------------------
+
+LICENCE (česky – shrnutí; závazné jsou anglické texty licencí)
+=============================================================
+
+Program (zdrojový kód aplikace SAKRA i sestavená aplikace)
+    PolyForm Noncommercial License 1.0.0 (soubor LICENSE). Zdarma pro jakékoli nekomerční účely:
+    osobní použití, koníčky, výzkum, studium a použití neziskovými, vzdělávacími, výzkumnými
+    a veřejnými institucemi (archivy, muzea, školy). Kdo program nebo jeho upravenou verzi šíří,
+    musí zachovat řádky „Required Notice“ – tedy uvádět autora.
+
+Návod a logo
+    CC BY-NC 4.0 (soubor LICENSE-CC-BY-NC-4.0.txt): PDF návod včetně textů a snímků obrazovky
+    (navod/obrazky/), logo (sakra/data/logo.png) a ikona (sakra/data/ikona.png, instalator/sakra.ico).
+    Uvádějte: „Jan Heřman (72ka), SAKRA“.
+
+Komerční použití
+    Jen se samostatnou písemnou licencí od autora. Kontakt: 2hp@seznam.cz
+
+Knihovny třetích stran
+    Mají vlastní licence (THIRD-PARTY-NOTICES.txt), licence SAKRA je nemění.

@@ -1,0 +1,1 @@
+"""Překlady textů rozhraní."""

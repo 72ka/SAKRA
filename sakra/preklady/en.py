@@ -1,0 +1,617 @@
+"""Angličtina: české texty rozhraní -> anglické.
+
+Klíče jsou přesně texty z volání tr() (šablony s {0}, {1}…). Úplnost hlídá testy/test_preklady.py.
+Hodnoty z dat (stavy, typy bloků, poznámky dekodérů) se překládají při zobrazení – přesně (TEXTY) nebo vzorem (VZORY).
+"""
+from __future__ import annotations
+
+TEXTY: dict[str, str] = {
+    # ------------------------------------------------------------ režimy, nabídky, lišta
+    "Průvodce": "Wizard",
+    "Pracovní stůl": "Workbench",
+    "Dávky": "Batch",
+    "Hlavní": "Main",
+    "&Soubor": "&File",
+    "&Metadata": "&Metadata",
+    "&Zobrazit": "&View",
+    "PULZY": "PULSES",
+    "&Nápověda": "&Help",
+    "Nová kazeta": "New cassette",
+    "Otevřít nahrávku…": "Open recording…",
+    "Otevřít projekt…": "Open project…",
+    "Uložit projekt": "Save project",
+    "Archivní balíček…": "Archive package…",
+    "Nastavení…": "Settings…",
+    "Konec": "Quit",
+    "Načíst z Excelu…": "Load from Excel…",
+    "Uložit Excel…": "Save Excel…",
+    "Přehrát výběr": "Play selection",
+    "O aplikaci": "About",
+    "Návod": "Manual",
+    "Návod (PDF)": "Manual (PDF)",
+    "O aplikaci SAKRA": "About SAKRA",
+    "Zavřít": "Close",
+    "nová kazeta": "new cassette",
+    "SAKRA — {0}": "SAKRA — {0}",
+    "SAKRA {0} – připraveno.": "SAKRA {0} – ready.",
+    "SAKRA – chyba": "SAKRA – error",
+    " Strana: ": " Side: ",
+    " Kanál: ": " Channel: ",
+    "Platforma kazet:": "Cassette platform:",
+    "Automaticky": "Automatic",
+    "Pro jaký počítač je kazeta?": "Which computer is the cassette for?",
+    "Ruční výběr zpracuje kazetu rychleji – zkusí se jen dekodéry zvoleného počítače. Automaticky SAKRA platformu rozpozná sama (vhodné, když na kazetě může být víc počítačů).":
+        "Choosing manually processes the cassette faster – only the decoders of the selected computer are tried. "
+        "Automatic lets SAKRA recognize the platform itself (useful when the cassette may hold several computers).",
+    "Zpracovat znovu všechny strany kazety pro: {0}?": "Process all sides of the cassette again for: {0}?",
+    "  Polarita: ": "  Polarity: ",
+    "Auto": "Auto",
+    "Levý": "Left",
+    "Pravý": "Right",
+    "Mono": "Mono",
+    "Normální": "Normal",
+    "Obrácená": "Inverted",
+    "levý": "left",
+    "pravý": "right",
+    "normální": "normal",
+    "obrácená": "inverted",
+    "obrácená polarita": "inverted polarity",
+    " kanál": " channel",
+    "Auto – použit: {0}": "Auto – used: {0}",
+    "Kanál stereo nahrávky: Auto = ten se silnějším signálem":
+        "Channel of a stereo recording: Auto = the one with the stronger signal",
+    "Polarita signálu: Auto = při chybách se zkusí i obrácený signál a ponechá se lepší výsledek":
+        "Signal polarity: Auto = on errors the inverted signal is tried as well and the better result is kept",
+    "Celá strana": "Whole side",
+    "Přehrát vybraný úsek (mezerník)": "Play the selected section (space)",
+    "Zastavit přehrávání": "Stop playback",
+    "▶ Přehrát": "▶ Play",
+    "✎ Ruční úprava": "✎ Manual edit",
+    "Oprava vadného bloku přidáním nebo odebráním přechodů přes nulu (po přiblížení na jednotlivé vzorky)":
+        "Repair a damaged block by adding or removing zero crossings (after zooming in to single samples)",
+    "Vrátit úpravy": "Undo edits",
+    "Hotovo": "Done",
+    # ------------------------------------------------------------ panely pracovního stolu
+    "PŘEHLED KAZETY": "CASSETTE OVERVIEW",
+    "HISTOGRAM DÉLEK": "LENGTH HISTOGRAM",
+    "OBSAH KAZETY": "CASSETTE CONTENTS",
+    "OBSAH KAZETY   <span style='font-weight:normal'>{0} souborů</span>":
+        "CASSETTE CONTENTS   <span style='font-weight:normal'>{0} files</span>",
+    "PLATFORMY NA PÁSCE": "PLATFORMS ON THE TAPE",
+    "VYBRANÝ SOUBOR": "SELECTED FILE",
+    "Obsah pásky": "Tape contents",
+    "Obsah": "Contents",
+    "Kazeta": "Cassette",
+    "Protokol": "Protocol",
+    "STRANA {0} · {1} – {2}{3}": "SIDE {0} · {1} – {2}{3}",
+    "zobrazeno {0}": "shown {0}",
+    "rychlost {0:+.1f} %": "speed {0:+.1f} %",
+    "STRANA": "SIDE",
+    "   <span style='font-weight:normal'>{0}</span>": "   <span style='font-weight:normal'>{0}</span>",
+    " opraveno": " repaired",
+    "&nbsp;&nbsp;<span style='color:#8A93A3'>●</span> nerozpoznáno":
+        "&nbsp;&nbsp;<span style='color:#8A93A3'>●</span> unrecognized",
+    "<span style='color:#8A93A3'>–</span>": "<span style='color:#8A93A3'>–</span>",
+    "<tr><td>{0} {1}</td><td align=right style='color:#8A93A3'>{2} · {3} v pořádku</td></tr>":
+        "<tr><td>{0} {1}</td><td align=right style='color:#8A93A3'>{2} · {3} OK</td></tr>",
+    "<tr><td>{0} Nerozpoznáno</td><td align=right style='color:#8A93A3'>{1}</td></tr>":
+        "<tr><td>{0} Unrecognized</td><td align=right style='color:#8A93A3'>{1}</td></tr>",
+    "<table width='100%' cellspacing=0 cellpadding=2>": "<table width='100%' cellspacing=0 cellpadding=2>",
+    "<span style='color:{0}'>{1}</span>": "<span style='color:{0}'>{1}</span>",
+    "Žádná nahrávka": "No recording",
+    "Najeďte myší na průběh strany": "Move the mouse over the side waveform",
+    "bez signálu": "no signal",
+    "nejčastější půlvlny: ": "most frequent half-waves: ",
+    "bez pulzů": "no pulses",
+    "zvuk": "sound",
+    "bez chyby": "no error",
+    "opraveno – ": "repaired – ",
+    "{0} položek": "{0} items",
+    "{0:g} kHz · {1} · {2}": "{0:g} kHz · {1} · {2}",
+    "{0:.0f} % jmenovité": "{0:.0f} % of nominal",
+    # ------------------------------------------------------------ tabulka obsahu
+    "Strana": "Side",
+    "Stav": "Status",
+    "Čas Od": "Time from",
+    "Čas Do": "Time to",
+    "Typ": "Type",
+    "Platforma": "Platform",
+    "Název": "Name",
+    "Funkční (Orig.)": "Working (orig.)",
+    "Funkční (Edit)": "Working (edit)",
+    "Turbo": "Turbo",
+    "Název bloku": "Block name",
+    "Typ Bloku": "Block type",
+    "Poznámky": "Notes",
+    "✓ v pořádku": "✓ OK",
+    "✓ opraveno": "✓ repaired",
+    "~ bez součtu": "~ no checksum",
+    "✗ chyba": "✗ error",
+    "? nerozpoznáno": "? unrecognized",
+    "♪ žádná data": "♪ no data",
+    "Výsledek dekódování (není ve vzoru, je na listu „SAKRA“)":
+        "Decoding result (not part of the template, it is on the “SAKRA” sheet)",
+    "Vyplňuje SAKRA z nahrávky (lze přepsat)": "Filled in by SAKRA from the recording (can be overwritten)",
+    "Všechny bloky v pořádku": "All blocks OK",
+    # ------------------------------------------------------------ detail programu
+    "Uložit tento program…": "Save this program…",
+    "<p style='color:#8A93A3'>Vyberte program v tabulce, ve stromu nebo na časové ose.</p>":
+        "<p style='color:#8A93A3'>Select a program in the table, in the tree or on the timeline.</p>",
+    "<h3 style='margin:0'>{0}</h3><p style='color:#8A93A3;margin:2px 0 8px'>{1} · {2}–{3}</p>":
+        "<h3 style='margin:0'>{0}</h3><p style='color:#8A93A3;margin:2px 0 8px'>{1} · {2}–{3}</p>",
+    "<p><b style='color:#8A93A3'>♪ žádná data</b> – šum, řeč nebo hudba. Do balíčku se uloží jen jako výřez WAV.</p>":
+        "<p><b style='color:#8A93A3'>♪ no data</b> – noise, speech or music. It goes into the package only as a WAV excerpt.</p>",
+    "<p>Úsek se nepodařilo přiřadit žádné platformě. Do balíčku se uloží jako přesný záznam pulzů (CSW) a výřez WAV. Platformu, nebo „žádná data“, jde určit ve sloupci Platforma.</p>":
+        "<p>The section could not be assigned to any platform. It goes into the package as an exact pulse record (CSW) and a WAV excerpt. The platform, or “no data”, can be set in the Platform column.</p>",
+    "<p><b style='color:{0}'>{1}</b>{2}</p>": "<p><b style='color:{0}'>{1}</b>{2}</p>",
+    "Název v bloku": "Name in block",
+    "Typ bloku": "Block type",
+    "Výstupní formát": "Output format",
+    "<table cellspacing=0 cellpadding=2>": "<table cellspacing=0 cellpadding=2>",
+    "<h4 style='margin:10px 0 4px'>Části programu</h4><ol style='margin-top:0'>":
+        "<h4 style='margin:10px 0 4px'>Program parts</h4><ol style='margin-top:0'>",
+    "<h4 style='margin:10px 0 4px'>Bloky</h4><table cellspacing=0 cellpadding=2 style='border-collapse:collapse'><tr style='background:#F6B26B;color:#1B1F27'><th>Č.</th><th>Typ</th><th>Od</th><th>Do</th><th>B</th><th></th><th align=left>Oprava / chyba</th></tr>":
+        "<h4 style='margin:10px 0 4px'>Blocks</h4><table cellspacing=0 cellpadding=2 style='border-collapse:collapse'><tr style='background:#F6B26B;color:#1B1F27'><th>No.</th><th>Type</th><th>From</th><th>To</th><th>B</th><th></th><th align=left>Repair / error</th></tr>",
+    "<tr><td align=right nowrap>{0}</td><td nowrap>{1}</td><td nowrap>{2}</td><td nowrap>{3}</td><td align=right>{4}</td><td style='color:{5}' align=center>{6}</td><td>{7}</td></tr>":
+        "<tr><td align=right nowrap>{0}</td><td nowrap>{1}</td><td nowrap>{2}</td><td nowrap>{3}</td><td align=right>{4}</td><td style='color:{5}' align=center>{6}</td><td>{7}</td></tr>",
+    "<h4 style='margin:10px 0 4px'>Texty v datech</h4><p style='font-family:monospace'>":
+        "<h4 style='margin:10px 0 4px'>Texts in the data</h4><p style='font-family:monospace'>",
+    "<h4 style='margin:10px 0 4px'>Exportované soubory</h4><p style='font-family:monospace'>":
+        "<h4 style='margin:10px 0 4px'>Exported files</h4><p style='font-family:monospace'>",
+    "<h4 style='margin:10px 0 4px'>Náhled</h4>": "<h4 style='margin:10px 0 4px'>Preview</h4>",
+    "<p style='color:#E04848'>Náhled nejde vytvořit: {0}</p>":
+        "<p style='color:#E04848'>Preview cannot be created: {0}</p>",
+    "<p style='margin:2px 0'>{0}<br><img src='{1}'></p>": "<p style='margin:2px 0'>{0}<br><img src='{1}'></p>",
+    "<p style='margin:6px 0'><a href='sakra:emulovat'>▶ Spustit v emulátoru – nahrávací obrazovka a obrazovka po spuštění</a></p>":
+        "<p style='margin:6px 0'><a href='sakra:emulovat'>▶ Run in the emulator – loading screen and screen after start</a></p>",
+    "<p style='margin:6px 0;color:#8A93A3'>Emulátor není k dispozici: {0}</p>":
+        "<p style='margin:6px 0;color:#8A93A3'>The emulator is not available: {0}</p>",
+    "<p style='margin:6px 0 2px;color:#8A93A3'>{0}</p><pre style='margin:0;font-size:9pt'>{1}</pre>":
+        "<p style='margin:6px 0 2px;color:#8A93A3'>{0}</p><pre style='margin:0;font-size:9pt'>{1}</pre>",
+    "BLOKY DAT · {0}<br><span style='font-weight:normal'><span style='color:#2EA866'>■</span> bez chyby  <span style='color:#E3A72F'>■</span> opraveno{1}  <span style='color:#E04848'>■</span> chyba{2}</span>":
+        "DATA BLOCKS · {0}<br><span style='font-weight:normal'><span style='color:#2EA866'>■</span> no error  <span style='color:#E3A72F'>■</span> repaired{1}  <span style='color:#E04848'>■</span> error{2}</span>",
+    "neznámé bajty {0}": "unknown bytes {0}",
+    "chybí": "missing",
+    "Délka dat": "Data length",
+    "Bloků": "Blocks",
+    "Záznamů": "Records",
+    "Poslední záznam": "Last record",
+    "Číslo souboru": "File number",
+    "Rychlost pásky": "Tape speed",
+    "Typ (hlavička)": "Type (header)",
+    "Délka (hlavička)": "Length (header)",
+    "Autostart řádek": "Autostart line",
+    "Délka programu": "Program length",
+    "Adresa": "Address",
+    "Poznámka": "Note",
+    "Kopie na pásce": "Copies on the tape",
+    "Rychlost": "Speed",
+    # ------------------------------------------------------------ karta kazety
+    "Digitalizace": "Digitization",
+    "Uložená sestava pracoviště: magnetofon, převodník, DI-box, autor":
+        "Saved workstation setup: tape deck, converter, DI box, author",
+    "Uložit jako profil…": "Save as profile…",
+    "Profil pracoviště": "Workstation profile",
+    "Tape-deck (značka)": "Tape deck (brand)",
+    "Tape-deck (model)": "Tape deck (model)",
+    "Vzorkování": "Sampling",
+    "Vyplní se z nahrávky": "Filled in from the recording",
+    "Formát": "Format",
+    "d. M. yyyy": "yyyy-MM-dd",
+    "Datum": "Date",
+    "Autor": "Author",
+    "Inventář": "Inventory",
+    "Inventární číslo": "Inventory number",
+    "např. HH08518 – pojmenuje balíček i soubory": "e.g. HH08518 – names the package and the files",
+    "Pův. transakce": "Orig. transaction",
+    "Verze dumpu": "Dump version",
+    "Verze metadat": "Metadata version",
+    "Popis kazety": "Cassette description",
+    "Výrobce": "Manufacturer",
+    "Délka strany": "Side length",
+    "Předvyplní se z délky nahrávky": "Prefilled from the length of the recording",
+    "Materiál": "Material",
+    "Fotky kazety a obalu": "Photos of the cassette and the case",
+    "Uloží se do balíčku (složka nahledy/) a vytisknou v protokolu":
+        "They are stored in the package (folder nahledy/) and printed in the protocol",
+    "Přidat fotky…": "Add photos…",
+    "Odebrat": "Remove",
+    "Fotky kazety": "Cassette photos",
+    "Obrázky (*.jpg *.jpeg *.png *.tif *.tiff *.webp)": "Images (*.jpg *.jpeg *.png *.tif *.tiff *.webp)",
+    "— vyberte —": "— select —",
+    "Název profilu (např. Pracoviště 1):": "Profile name (e.g. Workstation 1):",
+    # ------------------------------------------------------------ dialogy a hlášení pracovního stolu
+    "Úpravy vráceny – blok je v původním stavu.": "Edits undone – the block is in its original state.",
+    "Načíst metadata z Excelu": "Load metadata from Excel",
+    "Excel (*.xlsx)": "Excel (*.xlsx)",
+    "Uložit Excel": "Save Excel",
+    "Vytvářím archivní balíček…": "Creating the archive package…",
+    "Archivní balíček": "Archive package",
+    "Přiložit bezztrátovou kopii celé nahrávky (FLAC)": "Attach a lossless copy of the whole recording (FLAC)",
+    "WAV programů jako čistý signál (u opravených programů vždy)":
+        "Program WAVs as a clean signal (always for repaired programs)",
+    "Snímky z emulátoru: nahrávací obrazovka a obrazovka po spuštění (ZX Spectrum)":
+        "Emulator snapshots: loading screen and screen after start (ZX Spectrum)",
+    "Vyberte program s vadným blokem (nahrávka musí být načtená).":
+        "Select a program with a damaged block (the recording must be loaded).",
+    "Přibližte víc – kolečkem myši až na jednotlivé vzorky.": "Zoom in more – with the mouse wheel down to single samples.",
+    "přidáno {0}, odebráno {1} přechodů": "{0} crossings added, {1} removed",
+    "Ruční úprava ukončena bez opravy – blok vrácen do původního stavu.":
+        "Manual edit finished without a repair – the block was returned to its original state.",
+    "Nahrávka této strany není načtená.": "The recording of this side is not loaded.",
+    "Pro přehrávání chybí přehrávač (v Linuxu pw-play, paplay nebo aplay z balíčku alsa-utils).":
+        "No player for playback (on Linux pw-play, paplay or aplay from the alsa-utils package).",
+    "Počkejte, až doběhne předchozí úloha.": "Wait until the previous task finishes.",
+    "Nahrávky stran kazety": "Recordings of the cassette sides",
+    "Nahrávky (*.wav *.flac *.aif *.aiff *.ogg);;Všechny soubory (*)":
+        "Recordings (*.wav *.flac *.aif *.aiff *.ogg);;All files (*)",
+    "Nahrávky (*.wav *.flac *.aif *.aiff *.ogg)": "Recordings (*.wav *.flac *.aif *.aiff *.ogg)",
+    "Analyzuji ": "Analyzing ",
+    "Otevřít projekt": "Open project",
+    "Vyplňte nejdřív inventární číslo (záložka Kazeta).": "Fill in the inventory number first (Cassette tab).",
+    "Složka archivu:": "Archive folder:",
+    "Složka archivu": "Archive folder",
+    "Uloženo: ": "Saved: ",
+    "Strana {0}: kanál {1}, polarita {2} – nová analýza.": "Side {0}: channel {1}, polarity {2} – new analysis.",
+    "Úprava bloku{0}: přibližte kolečkem na jednotlivé vzorky, levé tlačítko přidá přechod přes nulu, pravé odebere nejbližší.":
+        "Editing block{0}: zoom in with the wheel to single samples, the left button adds a zero crossing, the right one removes the nearest.",
+    "V místě kliknutí není přechod (pravé tlačítko odebírá nejbližší přechod).":
+        "There is no crossing at the clicked spot (the right button removes the nearest crossing).",
+    "Otevřen projekt {0}": "Project {0} opened",
+    "Projekt uložen: {0}": "Project saved: {0}",
+    "Načtena metadata z {0}": "Metadata loaded from {0}",
+    "Spouštím {0} v emulátoru…": "Running {0} in the emulator…",
+    "Kam uložit {0}": "Where to save {0}",
+    "Nová analýza strany zahodí ruční úpravy signálu (": "A new analysis of the side discards manual signal edits (",
+    "). Pokračovat?": "). Continue?",
+    "✗ Blok se z upraveného signálu nepodařilo přečíst ({0}).": "✗ The block could not be read from the edited signal ({0}).",
+    "Projekt SAKRA (*{0})": "SAKRA project (*{0})",
+    "Excel uložen: {0}": "Excel saved: {0}",
+    "Balíček hotov: {0}": "Package done: {0}",
+    "Emulátor: {0} – {1}.": "Emulator: {0} – {1}.",
+    "Návod nebyl nalezen:\n{0}": "The manual was not found:\n{0}",
+    "Strana {0}": "Side {0}",
+    "<b>✓ Kontrolní součet bloku{0} sedí</b> – blok opraven ({1}).":
+        "<b>✓ The checksum of block{0} matches</b> – block repaired ({1}).",
+    "<b>✗ Součet bloku{0} nesedí</b> · chybných nebo neznámých bajtů: {1} · {2}":
+        "<b>✗ The checksum of block{0} does not match</b> · wrong or unknown bytes: {1} · {2}",
+    "Ruční úprava: {0} – {1}.": "Manual edit: {0} – {1}.",
+    "Strana {0}: {1} – programů: {2}, v pořádku: {3}, nerozpoznaných úseků: {4}.":
+        "Side {0}: {1} – programs: {2}, OK: {3}, unrecognized sections: {4}.",
+    "Varování – dekodér selhal (strana se zpracovala bez něj): {0}":
+        "Warning – a decoder failed (the side was processed without it): {0}",
+    "Projekt nejde otevřít:\n{0}": "The project cannot be opened:\n{0}",
+    # ------------------------------------------------------------ dávky
+    "Otevřete nahrávku strany kazety (WAV, FLAC)": "Open a recording of a cassette side (WAV, FLAC)",
+    "◷ ve frontě": "◷ queued",
+    "⟳ zpracovává se": "⟳ processing",
+    "✓ hotovo": "✓ done",
+    "⚠ ke kontrole": "⚠ to check",
+    "+ Přidat nahrávky…": "+ Add recordings…",
+    "+ Přidat složku…": "+ Add folder…",
+    "▶ Spustit": "▶ Start",
+    "Pozastavit": "Pause",
+    "Exportovat schválené": "Export approved",
+    "Pravidla dávky": "Batch rules",
+    "Kazety bez chyb rovnou exportovat do archivu": "Export cassettes without errors straight to the archive",
+    "Přiložit kopii nahrávky (FLAC)": "Attach a copy of the recording (FLAC)",
+    "WAV programů jako čistý signál": "Program WAVs as a clean signal",
+    "Snímky z emulátoru (ZX Spectrum)": "Emulator snapshots (ZX Spectrum)",
+    "Sledovat složku:": "Watch folder:",
+    "<span style='color:gray'>Nové nahrávky ve sledované složce se zařadí samy, jakmile se dopíšou.</span>":
+        "<span style='color:gray'>New recordings in the watched folder are queued automatically once they are fully written.</span>",
+    "Otevřít na pracovním stole": "Open on the workbench",
+    "Schválit": "Approve",
+    "Kazetu ke kontrole označí jako hotovou (export pak přes „Exportovat schválené“)":
+        "Marks a cassette to check as done (then export it with “Export approved”)",
+    "Zpracovat znovu": "Process again",
+    "Nahrávky do dávky": "Recordings for the batch",
+    "Složka s nahrávkami": "Folder with recordings",
+    "Složka": "Folder",
+    "Export schválených kazet…": "Exporting approved cassettes…",
+    "Výstup (archiv):": "Output (archive):",
+    "▤ Všechny": "▤ All",
+    "Inv. číslo": "Inv. number",
+    "Nahrávky": "Recordings",
+    "Délka": "Length",
+    "Platformy": "Platforms",
+    "Souborů": "Files",
+    "Chyby": "Errors",
+    "<p style='color:gray'>Vyberte kazetu.</p>": "<p style='color:gray'>Select a cassette.</p>",
+    "{0} v dávce · {1} hotovo · {2} ke kontrole · {3}": "{0} in the batch · {1} done · {2} to check · {3}",
+    "úsek bez platformy (uložen jako CSW). Určit platformu?": "section without a platform (saved as CSW). Set the platform?",
+    "formát bez kontrolního součtu, ověřeno jen délkou": "format without a checksum, verified by length only",
+    "Opraveno z kopií: {0}": "Repaired from copies: {0}",
+    "<p style='color:#E04848'>{0}</p>": "<p style='color:#E04848'>{0}</p>",
+    "<h4>Co potřebuje člověk</h4><ul>": "<h4>Needs a human</h4><ul>",
+    "<h4>Výsledek</h4><ul>": "<h4>Result</h4><ul>",
+    "<p>Balíček: {0}</p>": "<p>Package: {0}</p>",
+    "chyba čtení – ": "read error – ",
+    "Nerozpoznáno (CSW): {0}": "Unrecognized (CSW): {0}",
+    "Export {0}": "Export {0}",
+    "<h3>{0}</h3><p style='color:gray'>{1} · {2}": "<h3>{0}</h3><p style='color:gray'>{1} · {2}",
+    "Exportováno kazet: {0}": "Cassettes exported: {0}",
+    " · metadata z {0}": " · metadata from {0}",
+    "nerozpoznáno": "unrecognized",
+    # ------------------------------------------------------------ průvodce
+    "Nahrávka": "Recording",
+    "soubory stran": "side files",
+    "údaje do evidence": "records data",
+    "co je na pásce": "what is on the tape",
+    "Programy": "Programs",
+    "názvy a obsah": "names and contents",
+    "Kontrola": "Check",
+    "chyby a opravy": "errors and repairs",
+    "Uložit do archivu": "Save to archive",
+    "balíček a protokol": "package and protocol",
+    "Každou stranu kazety nahrajte do samostatného souboru WAV nebo FLAC. Stranu SAKRA pozná z názvu („HH08518 (1).wav“, „… strana B.wav“), jinak ji nastavte v tabulce.":
+        "Record each side of the cassette into a separate WAV or FLAC file. SAKRA recognizes the side from the name (“HH08518 (1).wav”, “… strana B.wav”), otherwise set it in the table.",
+    "Údaje o pracovišti a kazetě jdou do hlavičky tabulky Herního archivu. Uložený profil pracoviště vyplní magnetofon, převodník a autora jedním kliknutím.":
+        "Workstation and cassette details go into the header of the Herní archiv spreadsheet. A saved workstation profile fills in the tape deck, converter and author with one click.",
+    "Každý počítač ukládal data na kazetu jinak. SAKRA podle tvaru signálu odhadne platformu a potvrdí ji tím, že přečte hlavičku souboru se správným kontrolním součtem.":
+        "Every computer stored data on tape differently. SAKRA estimates the platform from the shape of the signal and confirms it by reading a file header with a correct checksum.",
+    "Seznam programů tak, jak je SAKRA přečetla. Doplňte nebo opravte název a vyberte, co program obsahuje (Hra, Program, Data…).":
+        "The list of programs as SAKRA read them. Complete or correct the name and choose what the program contains (Hra = game, Program, Data…).",
+    "Tady je všechno, co potřebuje lidské oko: poškozené bloky, opravy z kopií a úseky bez platformy.":
+        "Here is everything that needs a human eye: damaged blocks, repairs from copies and sections without a platform.",
+    "Archivní balíček je jeden soubor 7z (nebo složka) pojmenovaný inventárním číslem: programy ve formátech pro emulátory, výřezy WAV, bezztrátová kopie nahrávky, tabulka podle vzoru, protokol (HTML a PDF) a kontrolní součty.":
+        "The archive package is a single 7z file (or a folder) named by the inventory number: programs in emulator formats, WAV excerpts, a lossless copy of the recording, the spreadsheet by the template, a protocol (HTML and PDF) and checksums.",
+    "▶ Poslechnout": "▶ Listen",
+    "■ Zastavit": "■ Stop",
+    "Nahrávejte bez úprav – bez filtrů, normalizace a komprese.":
+        "Record without any processing – no filters, normalization or compression.",
+    "Inventární číslo pojmenuje balíček i soubory.": "The inventory number names the package and the files.",
+    "Soubory můžete do okna i přetáhnout.": "You can also drag the files into the window.",
+    "Vzorkování a formát se vyplní z nahrávky.": "Sampling and format are filled in from the recording.",
+    "Fotky kazety se uloží do balíčku a vytisknou v protokolu.":
+        "Cassette photos are stored in the package and printed in the protocol.",
+    "Na jedné kazetě může být víc počítačů – to je v pořádku.": "One cassette can hold several computers – that is fine.",
+    "Když si nejste jistí, úsek si pusťte.": "If you are not sure, play the section.",
+    "Nerozpoznané úseky se uloží jako přesný záznam pulzů (CSW) – nic se neztratí a dají se dekódovat později.":
+        "Unrecognized sections are saved as an exact pulse record (CSW) – nothing is lost and they can be decoded later.",
+    "Sloupce s rozbalovacím seznamem nabízejí hodnoty podle vzoru Herního archivu.":
+        "Columns with a drop-down list offer the values of the Herní archiv template.",
+    "Názvy z hlaviček zůstanou ve sloupci „Název bloku“.": "Names from the headers stay in the “Block name” column.",
+    "Poškozený program často opraví druhá kopie na kazetě – nahrajte i druhou stranu.":
+        "A damaged program is often repaired by a second copy on the cassette – record the other side too.",
+    "„Bez součtu“ znamená, že formát nemá kontrolní součet; úplnost je ověřená jen délkou.":
+        "“No checksum” means the format has no checksum; completeness is verified by length only.",
+    "Podrobnosti ukáže Pracovní stůl.": "The Workbench shows the details.",
+    "Hotový balíček se dá kdykoli vytvořit znovu z uloženého projektu.":
+        "The finished package can be created again at any time from the saved project.",
+    "Pracovní stůl ukáže výsledek podrobně, včetně vlny nahrávky.":
+        "The Workbench shows the result in detail, including the waveform of the recording.",
+    "← Zpět": "← Back",
+    "  Vybrat nahrávky…  ": "  Choose recordings…  ",
+    "např. HH08518": "e.g. HH08518",
+    "  Vytvořit archivní balíček  ": "  Create archive package  ",
+    "Otevřít složku balíčku": "Open the package folder",
+    "Pokračovat na Pracovní stůl": "Continue to the Workbench",
+    "Další kazeta": "Next cassette",
+    "Ukládám…": "Saving…",
+    "Nahrávka kazety": "Cassette recording",
+    "Vyberte nahrávky stran kazety (WAV nebo FLAC).": "Choose the recordings of the cassette sides (WAV or FLAC).",
+    "  …nebo soubory přetáhněte do okna.": "  …or drag the files into the window.",
+    "Soubor": "File",
+    "Inventární číslo:": "Inventory number:",
+    "Údaje o kazetě": "Cassette details",
+    "Pracoviště, inventář a popis kazety – hlavička tabulky Herního archivu.":
+        "Workstation, inventory and cassette description – the header of the Herní archiv spreadsheet.",
+    "Jaká je to platforma?": "Which platform is it?",
+    "SAKRA na kazetě našla tyto úseky a odhadla, pro který počítač jsou. Zkontrolujte hlavně úseky s chybou a nerozpoznané.":
+        "SAKRA found these sections on the cassette and estimated which computer they are for. Check mainly the sections with errors and the unrecognized ones.",
+    "Čtu nahrávky…": "Reading recordings…",
+    "Na nahrávce SAKRA nenašla žádná data.": "SAKRA found no data in the recording.",
+    " &nbsp;<span style='background:#FDF0CF;color:#8A5A00;border-radius:8px'>&nbsp;zkontrolujte&nbsp;</span>":
+        " &nbsp;<span style='background:#FDF0CF;color:#8A5A00;border-radius:8px'>&nbsp;check&nbsp;</span>",
+    "Nerozpoznáno": "Unrecognized",
+    "Platforma úseku, pokud ji znáte – nebo „žádná data“, když na pásce není program":
+        "The platform of the section if you know it – or “no data” when there is no program on the tape",
+    "Programy na kazetě": "Programs on the cassette",
+    "Doplňte názvy a obsah. Ostatní sloupce vyplnila SAKRA.": "Fill in the names and contents. SAKRA filled in the other columns.",
+    "Co by měl vidět člověk, než se kazeta uloží do archivu.": "What a human should see before the cassette is archived.",
+    "Vytvoří archivní balíček kazety.": "Creates the archive package of the cassette.",
+    "<span style='color:#E04848'>Vyplňte inventární číslo – pojmenuje balíček i soubory.</span>":
+        "<span style='color:#E04848'>Fill in the inventory number – it names the package and the files.</span>",
+    "Vybrat…": "Choose…",
+    "Zabalit balíček do jednoho souboru 7z": "Pack the package into a single 7z file",
+    "Místo složky vznikne jeden soubor 7z pojmenovaný inventárním číslem, se stejným obsahem.":
+        "Instead of a folder, a single 7z file named by the inventory number, with the same contents.",
+    "<p style='margin:16px 0 6px;color:#8A93A3;font-size:11px;font-weight:bold'>{0}</p>":
+        "<p style='margin:16px 0 6px;color:#8A93A3;font-size:11px;font-weight:bold'>{0}</p>",
+    "Krok {0} z {1}": "Step {0} of {1}",
+    "Žádná data": "No data",
+    "Zvukový záznam": "Sound recording",
+    "Signál nesedí na žádný známý formát. Vyberte platformu, pokud ji znáte – úsek se uloží jako přesný záznam pulzů (CSW), nic se neztratí.":
+        "The signal does not match any known format. Choose the platform if you know it – the section is saved as an exact pulse record (CSW), nothing is lost.",
+    "Bez dat (šum, řeč, hudba – návod, znělka). Do balíčku se uloží jen jako výřez WAV.":
+        "No data (noise, speech, music – instructions, jingle). It goes into the package only as a WAV excerpt.",
+    "<h3 style='color:#2EA866'>✓ Vše v pořádku – můžete uložit do archivu.</h3>":
+        "<h3 style='color:#2EA866'>✓ Everything is OK – you can save to the archive.</h3>",
+    "Formát nemá kontrolní součet – úplnost ověřena jen délkou a strukturou.":
+        "The format has no checksum – completeness verified by length and structure only.",
+    "Úsek bez platformy – uloží se jako přesný záznam pulzů (CSW) a výřez WAV.":
+        "Section without a platform – saved as an exact pulse record (CSW) and a WAV excerpt.",
+    "<h2 style='margin-bottom:2px'>{0}</h2><span style='color:gray'>{1}</span>":
+        "<h2 style='margin-bottom:2px'>{0}</h2><span style='color:gray'>{1}</span>",
+    "Potřebujete víc?": "Need more?",
+    "<p>Přepínačem <b>Pracovní stůl</b> nahoře se dostanete k podrobnému zobrazení se vším, co SAKRA o kazetě ví.</p><p>Podrobný <a href='sakra:navod'>návod v PDF</a> (Nápověda → Návod, F1).</p><p style='margin-top:18px;color:#8A93A3;font-size:11px'>SAKRA {0}<br><i>{1}</i><br>{2}<br>pro potřeby Herního archivu<br><a href='https://{3}'>{4}</a></p>":
+        "<p>The <b>Workbench</b> switch at the top opens the detailed view with everything SAKRA knows about the cassette.</p><p>A detailed <a href='sakra:navod'>manual in PDF</a> (Help → Manual, F1, in Czech).</p><p style='margin-top:18px;color:#8A93A3;font-size:11px'>SAKRA {0}<br><i>{1}</i><br>{2}<br>made for Herní archiv<br><a href='https://{3}'>{4}</a></p>",
+    "Pokračovat: {0} →": "Continue: {0} →",
+    "Nalezeno: {0}, {1}.": "Found: {0}, {1}.",
+    "Program se nepodařilo přečíst celý. ": "The program could not be read completely. ",
+    "Opraveno: ": "Repaired: ",
+    "<b style='color:#2EA866'>✓ Balíček je hotový:</b> {0}": "<b style='color:#2EA866'>✓ The package is done:</b> {0}",
+    "<span style='font-size:15px'><b>{0}</b></span>{1}<br><span style='color:#8A93A3'>Strana {2} · {3} – {4} · {5}</span>":
+        "<span style='font-size:15px'><b>{0}</b></span>{1}<br><span style='color:#8A93A3'>Side {2} · {3} – {4} · {5}</span>",
+    "<b>{0} z {1}</b> v pořádku": "<b>{0} of {1}</b> OK",
+    "<span style='color:#2EA866'>✓ Potvrzeno: přečteno {0} se správným součtem nebo strukturou</span>":
+        "<span style='color:#2EA866'>✓ Confirmed: {0} read with a correct checksum or structure</span>",
+    "<span style='color:#E04848'>✗ {0} s chybou – podrobnosti v kroku Kontrola</span>":
+        "<span style='color:#E04848'>✗ {0} with an error – details in the Check step</span>",
+    "<span style='font-size:15px'><b>{0}</b></span><br><span style='color:#8A93A3'>Strana {1} · {2} – {3} · {4:.0f} s</span>":
+        "<span style='font-size:15px'><b>{0}</b></span><br><span style='color:#8A93A3'>Side {1} · {2} – {3} · {4:.0f} s</span>",
+    "<b style='color:{0}'>{1}</b> &nbsp; <b>{2}</b> <span style='color:gray'>strana {3} · {4}–{5}</span>":
+        "<b style='color:{0}'>{1}</b> &nbsp; <b>{2}</b> <span style='color:gray'>side {3} · {4}–{5}</span>",
+    "<ul style='margin-left:-20px'>": "<ul style='margin-left:-20px'>",
+    "nejde přečíst: {0}": "cannot be read: {0}",
+    "Tipy": "Tips",
+    "Co se děje v tomto kroku": "What happens in this step",
+    "<table width='100%' cellpadding=4 style='border:1px solid {0};border-radius:8px'>":
+        "<table width='100%' cellpadding=4 style='border:1px solid {0};border-radius:8px'>",
+    "MAŤO": "MAŤO",
+    # ------------------------------------------------------------ o aplikaci
+    "<p align=center style='font-size:22pt;font-weight:bold;margin:0'>SAKRA <span style='font-size:11pt;font-weight:normal;color:gray'>{0}</span></p><p align=center style='font-size:12pt;margin:2px 0 10px 0'>{1}</p><p align=center>Digitalizace a archivace audiokazet s programy pro staré počítače.</p><p align=center>Autor: <b>{2}</b>, alias <b>{3}</b>, {4}<br>Vyrobeno pro potřeby Herního archivu – <a href='https://{5}'>{6}</a></p><p align=center style='color:gray;font-size:9pt'>Platformy: ":
+        "<p align=center style='font-size:22pt;font-weight:bold;margin:0'>SAKRA <span style='font-size:11pt;font-weight:normal;color:gray'>{0}</span></p><p align=center style='font-size:12pt;margin:2px 0 10px 0'>{1}</p><p align=center>Digitization and archiving of audio cassettes with programs for old computers.</p><p align=center>Author: <b>{2}</b>, alias <b>{3}</b>, {4}<br>Made for the needs of Herní archiv – <a href='https://{5}'>{6}</a></p><p align=center style='color:gray;font-size:9pt'>Platforms: ",
+    "<p align=center style='font-size:9pt'>Licence: nekomerční použití – <a href='{0}'>{1}</a>; návod a logo <a href='{2}'>{3}</a>.<br>Komerční použití jen s písemným souhlasem autora: <a href='mailto:{4}'>{4}</a></p>":
+        "<p align=center style='font-size:9pt'>License: noncommercial use – <a href='{0}'>{1}</a>; manual and logo <a href='{2}'>{3}</a>.<br>Commercial use only with the author's written consent: <a href='mailto:{4}'>{4}</a></p>",
+    # ------------------------------------------------------------ nastavení a záhlaví
+    "Nastavení": "Settings",
+    "Barvy": "Colours",
+    "Styl": "Style",
+    "Podle systému": "Follow the system",
+    "Světlé": "Light",
+    "Tmavé": "Dark",
+    "Moderní (zaoblené panely, jantarová tlačítka, přepínač režimů jako segmenty)":
+        "Modern (rounded panels, amber buttons, mode switch as segments)",
+    "Klasický (Fusion)": "Classic (Fusion)",
+    "Vlastní záhlaví okna (tři barevné tečky místo rámu systému)":
+        "Custom window title bar (three coloured dots instead of the system frame)",
+    "Velikost okna pak jde měnit úchytem vpravo dole nebo dvojklikem na záhlaví.":
+        "The window size can then be changed with the grip at the bottom right or by double-clicking the title bar.",
+    "Minimalizovat": "Minimize",
+    "Maximalizovat": "Maximize",
+    "Změna jazyka se projeví po restartu aplikace.": "The language change takes effect after restarting the application.",
+    # ------------------------------------------------------------ tvary pro pocet()
+    "kazeta": "cassette", "kazety": "cassettes", "kazet": "cassettes",
+    "strana": "side", "strany": "sides", "stran": "sides",
+    "program": "program", "programy": "programs", "programů": "programs",
+    "položka": "item", "položky": "items", "položek": "items",
+    "dekódovaný soubor": "decoded file", "dekódované soubory": "decoded files", "dekódovaných souborů": "decoded files",
+    # ------------------------------------------------------------ hodnoty z dat (zobrazení)
+    "ok": "OK",
+    "opraveno": "repaired",
+    "neověřeno": "unverified",
+    "chyba": "error",
+    "žádná data": "no data",
+    "(neznámá)": "(unknown)",
+    "žádná data (šum, řeč, hudba…)": "no data (noise, speech, music…)",
+    "jiná": "other",
+    "(nerozpoznáno)": "(unrecognized)",
+    "(žádná data)": "(no data)",
+    "(zvukový záznam)": "(sound recording)",
+    "(bez jména)": "(no name)",
+    "(bez hlavičky)": "(no header)",
+    "Bez hlavičky": "No header",
+    "Strojový kód": "Machine code",
+    "Strojový kód (OBJ)": "Machine code (OBJ)",
+    "Binární": "Binary",
+    "Binární (XEX)": "Binary (XEX)",
+    "Binární (chráněný)": "Binary (protected)",
+    "Binární soubor": "Binary file",
+    "BASIC (chráněný)": "BASIC (protected)",
+    "BASIC (tokenizovaný)": "BASIC (tokenized)",
+    "Monolitický strojový program": "Monolithic machine code program",
+    "Zaváděcí": "Boot",
+    "PRG (přemístitelný)": "PRG (relocatable)",
+    "Konec pásky": "End of tape",
+    "Kód": "Code",
+    "Název kazety": "Cassette name",
+    "Soubor ": "File ",
+    "Hlavička EDIS": "EDIS header",
+    "Data BASICu (BSD)": "BASIC data (BSD)",
+    "Monitor (MGSV)": "Monitor (MGSV)",
+    "Data BASICu": "BASIC data",
+    "Pascal (pokračování)": "Pascal (continuation)",
+    "Hudba (MUSICA)": "Music (MUSICA)",
+    "Komprimovaný text (KASWORD)": "Compressed text (KASWORD)",
+    "Obrázek (GRED, komprimovaný)": "Picture (GRED, compressed)",
+    "Obrázek (GRED)": "Picture (GRED)",
+    "Výřez okna (GRED)": "Window cut-out (GRED)",
+    "Databáze (EVIDENCE)": "Database (EVIDENCE)",
+    "hlavička": "header",
+    "data": "data",
+    "konec": "end",
+    "nestandardní": "non-standard",
+    "záznam": "record",
+    "rychlý": "fast",
+    "pomalý": "slow",
+    "plný": "full",
+    "částečný": "partial",
+    "Nahrávací obrazovka (z emulátoru)": "Loading screen (from the emulator)",
+    "Začátek dat": "Start of data",
+    "Výpis BASICu (nejisté tokeny jako {XX})": "BASIC listing (uncertain tokens as {XX})",
+    "Výpis BASICu": "BASIC listing",
+    "Text": "Text",
+    "rychlé nahrání (ROM)": "fast load (ROM)",
+    "emulace pásky (turbo)": "tape emulation (turbo)",
+    "neúplný soubor (chybí hlavička nebo konec)": "incomplete file (header or end missing)",
+    "výpadek signálu, zbytek bloku nejde zarovnat": "signal dropout, the rest of the block cannot be aligned",
+    "sklouznutí signálu bez ztráty dat": "signal slip without data loss",
+    "chybí poslední záznam (FFh)": "the last record (FFh) is missing",
+    "převzato z kopie bloku na pásce": "taken from a copy of the block on the tape",
+    "shodná kopie na pásce": "identical copy on the tape",
+    "Adresa ukládání a spuštění není na pásce – bývá namluvená před záznamem.":
+        "The load and start address is not on the tape – it is usually spoken before the recording.",
+    "na pásce je záznam se stejným začátkem, ale jiným obsahem (jiná verze?)":
+        "the tape holds a record with the same start but different contents (another version?)",
+    "Načítám nahrávku": "Loading the recording",
+    "Hledám pulzy": "Finding pulses",
+    "Sestavuji obsah": "Building the contents",
+    "Hotovo.": "Done.",
+}
+
+# Texty se složenými hodnotami (poznámky dekodérů, průběh analýzy): (regulární výraz celého textu, náhrada).
+# Náhrada je šablona pro Match.expand, nebo funkce, která dostane Match (pro vnořené texty).
+
+
+def _vnoreny(m, sablona: str) -> str:
+    from ..i18n import tr_data
+    return sablona.format(*[tr_data(g) if g is not None else "" for g in m.groups()])
+
+
+VZORY: list = [
+    (r"Strana (\d+): (.+)", lambda m: _vnoreny(m, "Side {0}: {1}")),
+    (r"Obrácená polarita: (.+)", lambda m: _vnoreny(m, "Inverted polarity: {0}")),
+    (r"Dekóduji: (.+)", r"Decoding: \1"),
+    (r"chybí blok (.+)", r"missing block \1"),
+    (r"poškozený blok (.+)", r"damaged block \1"),
+    (r"blok (v [\d.]+ s|\d+): (.+)", lambda m: "block " + m.group(1).replace("v ", "at ") + ": "
+     + _vnoreny(m, "{1}")),
+    (r"ruční úprava signálu \(\+(\d+)/−(\d+) přechodů\)", r"manual signal edit (+\1/−\2 crossings)"),
+    (r"opakované čtení \(práh (\d+ ?%)\)", r"repeated read (threshold \1)"),
+    (r"opakované čtení \(práh (\d+ ?%), plovoucí střed\)", r"repeated read (threshold \1, floating baseline)"),
+    (r"převzato z kopie \(strana (\d+), ([\d.]+) s\)", r"taken from a copy (side \1, \2 s)"),
+    (r"převzato z kopie \(([\d.]+) s\)", r"taken from a copy (\1 s)"),
+    (r"převzato z (opakované|první) kopie bloku na pásce",
+     lambda m: f"taken from the {'repeated' if m.group(1) == 'opakované' else 'first'} copy of the block on the tape"),
+    (r"výpadek signálu, chybí (\d+) B", r"signal dropout, \1 B missing"),
+    (r"(\d+) nestandardní blok\(y\) bez kontroly, celkem (\d+) B", r"\1 non-standard block(s) without a check, \2 B in total"),
+    (r"(\d+) bitů podle kopií \(rozhodla většina\)", r"\1 bits from copies (majority vote)"),
+    (r"(\d+) bitů podle kopií \(chybějící pulzy doplněny z druhé kopie\)",
+     r"\1 bits from copies (missing pulses filled in from the other copy)"),
+    (r"(\d+) kopie, rozdílných bitů (\d+) \(rozhodla většina\)", r"\1 copies, \2 different bits (majority vote)"),
+    (r"(\d+) kopie, rozdílných bitů (\d+) \(chybějící pulzy doplněny z druhé kopie\)",
+     r"\1 copies, \2 different bits (missing pulses filled in from the other copy)"),
+    (r"(\d+) shodné kopie", r"\1 identical copies"),
+    (r"(\d+) B z druhé kopie na pásce", r"\1 B from the other copy on the tape"),
+    (r"liší se od sousední kopie v (\d+) B \(pozice (.*)", r"differs from the neighbouring copy in \1 B (positions \2"),
+    (r"\(záznam (\d+) B\)", r"(record \1 B)"),
+    (r"\(bez hlavičky, (\d+) B\)", r"(no header, \1 B)"),
+    (r"bez hlavičky, (\d+) B", r"no header, \1 B"),
+    (r"(.+) – chybí data", lambda m: _vnoreny(m, "{0} – data missing")),
+    (r"Komenium \((.+), hlavička (\d) B\)", lambda m: f"Komenium ({m.group(1).replace('neznámý', 'unknown')}, "
+     f"header {m.group(2)} B)"),
+    (r"Nahrávací obrazovka „(.*)“", lambda m: f"Loading screen “{m.group(1).replace('bez hlavičky', 'no header')}”"),
+    (r"Po spuštění \(emulátor, (.+), ([\d.]+) s po nahrání\)",
+     lambda m: _vnoreny(m, "After start (emulator, {0}, {1} s after loading)")),
+    (r"chybí balíček zx \((.*)\)", r"the zx package is missing (\1)"),
+    (r"Balím do 7z: (\d+) %", r"Packing into 7z: \1 %"),
+    (r"(.) (.+)", lambda m: _typ_s_kodem(m)),
+]
+
+
+def _typ_s_kodem(m) -> str:
+    """Typ PMD 85 „> BASIC“, „D Data BASICu“…: kód typu a známý název; jinak beze změny."""
+    t = TEXTY.get(m.group(2))
+    return f"{m.group(1)} {t}" if t else m.group(0)
