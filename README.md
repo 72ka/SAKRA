@@ -4,6 +4,14 @@
   <img src="sakra/data/logo.png" alt="SAKRA – a Swiss Army Knife for Retrogaming Archaeologists" width="70%">
 </p>
 
+<p align="center">
+  <a href="https://github.com/72ka/SAKRA/actions/workflows/sestaveni.yml"><img src="https://github.com/72ka/SAKRA/actions/workflows/sestaveni.yml/badge.svg" alt="Build"></a>
+  <a href="https://github.com/72ka/SAKRA/releases"><img src="https://img.shields.io/github/v/release/72ka/SAKRA?include_prereleases&label=download" alt="Download"></a>
+</p>
+
+**Download:** ready-made builds for **Windows** (installer or portable zip) and **Linux** are on the
+[Releases](https://github.com/72ka/SAKRA/releases) page – no Python needed.
+
 **SAKRA** is a toolkit for retro-computing archaeology, data preservation and digital archiving. It turns digitized
 audio recordings of old computer cassettes (`.wav`, `.flac`) into clean, emulator-ready tape images and binaries,
 verifies them, repairs damaged blocks where possible, and packs everything into an archive package with metadata.
@@ -44,6 +52,14 @@ at once and SAKRA tells when its checksum matches.</td>
 <b>Batch</b> – a queue of cassettes processed in the background; error-free ones go straight to the archive,
 the rest wait for a human check.</td>
 </tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/ladeni_spatne.png" alt="Head alignment – misaligned"><br>
+<b>Record from tape – head alignment</b>: a misaligned head shifts the stereo channels (here over 100 µs,
+red) and widens the pulse-length peak.</td>
+<td width="50%"><img src="docs/screenshots/ladeni_serizeno.png" alt="Head alignment – aligned"><br>
+<b>After turning the azimuth screw</b>: channel offset within the green zone, a narrower orange peak and a
+smaller spread – ready to record.</td>
+</tr>
 </table>
 
 The interface is available in **English and Czech**; the screenshots above are from the English version.
@@ -82,6 +98,21 @@ The interface is available in **English and Czech**; the screenshots above are f
   decoders and processes the cassette faster. Every platform has its own generated icon across the application.
 * Repairs: re-reading of damaged blocks with an adaptive baseline, repair from another copy on the same tape,
   majority vote across copies, manual signal editing down to single samples.
+* Record a cassette side straight from the audio input (*File → Record from tape…*): level meter with clip
+  warning, head azimuth alignment aid (pulse-length histogram with peak spread, L/R channel offset in µs),
+  files named `<inventory number> (<side>).wav`, then processed as usual.
+* Settings: default workstation profile pre-filled into every new cassette, profile management with JSON
+  import/export, configurable folders, settings stored in the system, a custom INI file or a portable
+  `sakra.ini` next to the program (or `SAKRA_NASTAVENI`), full settings export/import.
+* Stereo recordings: view left, right, both tracks or their sum; analyse the L+R sum aligned by the measured
+  (or manually tuned) offset between tracks – helps with skewed heads and weak recordings.
+* Cassette and case photos from files or straight from a connected USB camera (optional OpenCV add-on,
+  `pip install -e ".[kamera]"`).
+* Manual marking of noise, music and speech: Shift + drag on the timeline, right click → *Mark as*.
+  The section gets its own row (Audio), and analysis skips it from then on (also after re-analysis;
+  saved with the project).
+* Weak-signal markers on the timeline: places where the level inside a block drops against its surroundings
+  (orange = weak read below 50 %, red = dropout below 25 %), so damaged spots are easy to find.
 * Three working modes: **Wizard** for volunteers, **Workbench** (waveform, pulses, length histogram, block map)
   and **Batch** processing with a watched folder.
 * Metadata exactly in the layout of the Herní archiv spreadsheet (Excel import/export), archive package with
@@ -114,6 +145,18 @@ Requires **Python 3.11+**.
 Note: PySide6 6.12.0 crashes on Python 3.11, so `pyproject.toml` pins PySide6 < 6.12 for Python 3.11.
 
 ### Stand-alone builds (no Python needed)
+
+Builds are made automatically by **GitHub Actions** ([`.github/workflows/sestaveni.yml`](.github/workflows/sestaveni.yml)):
+
+* every push runs the tests on Linux and Windows;
+* pushing a version tag builds everything and publishes a release with the files:
+  ```bash
+  git tag v0.3.0a2 && git push origin v0.3.0a2
+  ```
+  (alpha/beta/rc versions are marked as pre-releases; set the same version in `sakra/__init__.py` and `pyproject.toml` first);
+* *Actions → Sestavení → Run workflow* builds on demand (files are attached to the run as artifacts).
+
+Local builds:
 
 * Windows: `instalator\sestav_windows.bat` → `dist\SAKRA\`; with Inno Setup 6 installed also an installer.
 * Linux: `instalator/sestav_linux.sh` → `dist/SAKRA/`.
@@ -160,7 +203,8 @@ archivu. Má tři režimy: Průvodce, Pracovní stůl a Dávky.
 
 * Podrobný popis a ovládání: [README.txt](README.txt)
 * Návod s obrázky: [sakra/dokumenty/SAKRA-navod.pdf](sakra/dokumenty/SAKRA-navod.pdf)
-* Spuštění: Windows `run.bat`, Linux `./run.sh` (Python 3.11+)
+* Hotové verze ke stažení (Windows: instalátor nebo přenosný zip, Linux): [Releases](https://github.com/72ka/SAKRA/releases)
+* Spuštění ze zdrojů: Windows `run.bat`, Linux `./run.sh` (Python 3.11+)
 
 Původní samostatné převodníky (PMD 85, Maťo, IQ 151, SAPI-1, ZX81) jsou ve složce `obsolete/`; aplikace je
 nahrazuje, ale fungují i samostatně.

@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtWidgets import QApplication
+
+from ..nastaveni import nastaveni
 
 JANTAR, JANTAR_2 = "#F2A93B", "#D98B12"
 
@@ -33,12 +35,12 @@ class Nastaveni:
 
     @classmethod
     def nacti(cls) -> "Nastaveni":
-        s = QSettings("HerniArchiv", "SAKRA")
+        s = nastaveni()
         return cls(s.value("vzhled/barvy", "system"), s.value("vzhled/styl", "navrh"),
                    s.value("vzhled/zahlavi", False, bool))
 
     def uloz(self) -> None:
-        s = QSettings("HerniArchiv", "SAKRA")
+        s = nastaveni()
         s.setValue("vzhled/barvy", self.barvy)
         s.setValue("vzhled/styl", self.styl)
         s.setValue("vzhled/zahlavi", self.zahlavi)
@@ -59,11 +61,40 @@ def barvy() -> dict:
     return TMAVE if je_tmave() else SVETLE
 
 
+_platforma = {"tmava": None}      # paleta systému před první úpravou (vlastní paletu už nic neprozradí)
+
+
 def _system_tmave(app: QApplication) -> bool:
+    """Tmavý režim systému. Qt ho na některých systémech zná až po zobrazení okna (Windows) nebo
+    se zpožděním (Linux, portál) – pak hlásí Unknown/Light a později pošle colorSchemeChanged
+    (viz hlidej_system). Pro Unknown platí paleta platformy zjištěná při startu."""
+    if _platforma["tmava"] is None:
+        _platforma["tmava"] = app.palette().color(QPalette.ColorRole.Window).lightness() < 128
     try:
-        return app.styleHints().colorScheme() == Qt.ColorScheme.Dark
+        schema = app.styleHints().colorScheme()
     except AttributeError:          # starší Qt
-        return app.palette().color(QPalette.ColorRole.Window).lightness() < 128
+        return _platforma["tmava"]
+    if schema == Qt.ColorScheme.Dark:
+        return True
+    if schema == Qt.ColorScheme.Light:
+        return False
+    return _platforma["tmava"]
+
+
+def hlidej_system(app: QApplication, pouzij_znovu) -> None:
+    """Při barvách „podle systému“ sledovat tmavý režim: hned po zobrazení okna a při každé změně
+    zavolat pouzij_znovu(), pokud se liší od použitého."""
+    from PySide6.QtCore import QTimer
+
+    def over(*_):
+        if Nastaveni.nacti().barvy == "system" and _system_tmave(app) != je_tmave():
+            pouzij_znovu()
+    try:
+        app.styleHints().colorSchemeChanged.connect(over)
+    except AttributeError:          # starší Qt
+        pass
+    QTimer.singleShot(0, over)
+    QTimer.singleShot(1000, over)
 
 
 def _paleta(b: dict, tmava: bool) -> QPalette:
@@ -138,7 +169,7 @@ QDockWidget::title {{ background: {b['levy']}; padding: 9px 12px; border-bottom:
 QGroupBox {{ background: {b['panel']}; border: 1px solid {b['okraj']}; border-radius: 10px; margin-top: 22px; padding: 10px 8px 8px 8px; }}
 QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top left; left: 10px; padding: 0 4px;
     color: {b['slaby']}; font-weight: bold; }}
-QProgressBar {{ background: {b['okraj']}; border: none; border-radius: 4px; max-height: 8px; text-align: center; color: transparent; }}
+QProgressBar {{ background: {b['okraj']}; border: none; border-radius: 4px; max-height: 8px; qproperty-textVisible: false; }}
 QProgressBar::chunk {{ background: {JANTAR}; border-radius: 4px; }}
 QStatusBar {{ background: {b['status']}; color: {b['slaby']}; border-top: 1px solid {b['okraj']}; }}
 QStatusBar QLabel {{ color: {b['slaby']}; }}
@@ -181,6 +212,12 @@ def pouzij(app: QApplication, n: Nastaveni | None = None, koren=None) -> Nastave
         app.setFont(QFont())
         app.setStyleSheet("")
         app.setPalette(_paleta(b, True) if tmave else app.style().standardPalette())
+        # styl návrhu skrývá procenta v tenkých pruzích (qproperty-textVisible); klasický je zase ukáže,
+        # kromě pruhů, které text nemají nikdy (vlastnost "bez_textu")
+        from PySide6.QtWidgets import QProgressBar
+        for w in app.allWidgets():
+            if isinstance(w, QProgressBar) and not w.property("bez_textu"):
+                w.setTextVisible(True)
     # při přepnutí za běhu: widgety okna si jinak nechají barvy z předchozího stylu
     if koren is not None:
         from PySide6.QtWidgets import QWidget

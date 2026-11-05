@@ -2,17 +2,17 @@
 from __future__ import annotations
 
 import datetime as dt
-import json
 
 from pathlib import Path
 
-from PySide6.QtCore import QDate, QSettings, QSize, Qt, Signal
+from PySide6.QtCore import QDate, QSize, Qt, Signal
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (QComboBox, QDateEdit, QFileDialog, QFormLayout, QFrame, QGroupBox, QHBoxLayout,
                                QInputDialog, QLineEdit, QListView, QListWidget, QListWidgetItem, QPushButton,
                                QScrollArea, QSpinBox, QVBoxLayout, QWidget)
 
 from ..jadro.model import Kazeta
+from .. import nastaveni
 from ..i18n import tr
 
 VYROBCI = [
@@ -29,7 +29,7 @@ VYROBCI = [
     tr("Tesla"),
 ]
 MATERIALY = ["", tr("Type I"), tr("Type II"), tr("Type IV")]
-POLE_PROFILU = ["tape_deck", "tape_deck_model", "sound_card", "di_box", "autor"]
+POLE_PROFILU = nastaveni.POLE_PROFILU
 
 
 def posuvne(w: QWidget) -> QScrollArea:
@@ -47,12 +47,13 @@ def _qdate(d: dt.date | None) -> QDate:
 
 class KartaKazety(QWidget):
     zmeneno = Signal()
+    spravovat_profily = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.kazeta = Kazeta()
         self._plnim = False
-        self.nastaveni = QSettings("HerniArchiv", "SAKRA")
+        self.nastaveni = nastaveni.nastaveni()
 
         digi = QGroupBox(tr("Digitalizace"))
         fd = QFormLayout(digi)
@@ -62,8 +63,12 @@ class KartaKazety(QWidget):
         self.profil.activated.connect(self._pouzij_profil)
         ulozit = QPushButton(tr("Uložit jako profil…"))
         ulozit.clicked.connect(self._uloz_profil)
+        spravovat = QPushButton(tr("Spravovat…"))
+        spravovat.setToolTip(tr("Výchozí profil, přejmenování, mazání, import a export profilů (Nastavení)"))
+        spravovat.clicked.connect(self.spravovat_profily)
         radek_profil.addWidget(self.profil, 1)
         radek_profil.addWidget(ulozit)
+        radek_profil.addWidget(spravovat)
         fd.addRow(tr("Profil pracoviště"), radek_profil)
         self.tape_deck = self._radek(fd, tr("Tape-deck (značka)"))
         self.tape_deck_model = self._radek(fd, tr("Tape-deck (model)"))
@@ -74,7 +79,8 @@ class KartaKazety(QWidget):
         self.datum = QDateEdit()
         self.datum.setCalendarPopup(True)
         self.datum.setDisplayFormat(tr("d. M. yyyy"))
-        self.datum.dateChanged.connect(self._uloz)
+        self.datum.dateChanged.connect(self._zmena_data)
+        self._datum_rucne = False            # dnešek je jen zobrazený návrh, dokud ho člověk nezmění
         fd.addRow(tr("Datum"), self.datum)
         self.autor = self._radek(fd, tr("Autor"))
 
@@ -117,9 +123,13 @@ class KartaKazety(QWidget):
         tl = QHBoxLayout()
         pridat = QPushButton(tr("Přidat fotky…"))
         pridat.clicked.connect(self._pridej_fotky)
+        z_kamery = QPushButton(tr("Z kamery…"))
+        z_kamery.setToolTip(tr("Vyfotit kazetu a obal připojenou kamerou (USB webkamera)"))
+        z_kamery.clicked.connect(self._fotky_z_kamery)
         odebrat = QPushButton(tr("Odebrat"))
         odebrat.clicked.connect(self._odeber_fotku)
         tl.addWidget(pridat)
+        tl.addWidget(z_kamery)
         tl.addWidget(odebrat)
         tl.addStretch(1)
         lf.addLayout(tl)
@@ -149,6 +159,7 @@ class KartaKazety(QWidget):
         for jm in ("tape_deck", "tape_deck_model", "sound_card", "di_box", "vzorkovani", "format", "autor"):
             getattr(self, jm).setText(getattr(d, jm))
         self.datum.setDate(_qdate(d.datum) if d.datum else QDate.currentDate())
+        self._datum_rucne = False
         self.cislo.setText(i.cislo)
         self.puv_transakce.setText(i.puv_transakce)
         self.verze_dumpu.setValue(i.verze_dumpu)
@@ -157,7 +168,16 @@ class KartaKazety(QWidget):
         self.delka_strany.setText(i.delka_strany)
         self.material.setCurrentText(i.material)
         self._obnov_fotky()
+        self._nacti_profily()
         self._plnim = False
+
+    def obnov_profily(self) -> None:
+        self._nacti_profily()
+
+    def _zmena_data(self, *_):
+        if not self._plnim:
+            self._datum_rucne = True
+        self._uloz()
 
     def _uloz(self, *_):
         if self._plnim:
@@ -165,7 +185,8 @@ class KartaKazety(QWidget):
         d, i = self.kazeta.digitalizace, self.kazeta.inventar
         for jm in ("tape_deck", "tape_deck_model", "sound_card", "di_box", "vzorkovani", "format", "autor"):
             setattr(d, jm, getattr(self, jm).text().strip())
-        d.datum = self.datum.date().toPython()
+        if d.datum is not None or self._datum_rucne:     # prázdné datum doplní analýza z času změny nahrávky
+            d.datum = self.datum.date().toPython()
         i.cislo = self.cislo.text().strip()
         i.puv_transakce = self.puv_transakce.text().strip()
         i.verze_dumpu = self.verze_dumpu.value()
@@ -196,6 +217,19 @@ class KartaKazety(QWidget):
             self._obnov_fotky()
             self.zmeneno.emit()
 
+    def _fotky_z_kamery(self) -> None:
+        from .kamera import DialogKamera
+        d = DialogKamera(self.kazeta.inventar.cislo, self.nastaveni.value("slozka", str(Path.home())), self)
+        d.exec()                      # i po Zavřít: co se vyfotilo, je uložené a patří ke kazetě
+        self.pridej_fotky(d.snimky)
+
+    def pridej_fotky(self, cesty: list[str]) -> None:
+        nove = [c for c in cesty if c not in self.kazeta.fotky]
+        if nove:
+            self.kazeta.fotky += nove
+            self._obnov_fotky()
+            self.zmeneno.emit()
+
     def _odeber_fotku(self) -> None:
         r = self.fotky.currentRow()
         if 0 <= r < len(self.kazeta.fotky):
@@ -205,18 +239,26 @@ class KartaKazety(QWidget):
 
     # ---- profily pracoviště ----
     def _profily(self) -> dict:
-        try:
-            return json.loads(self.nastaveni.value("profily", "{}"))
-        except (TypeError, ValueError):
-            return {}
+        return nastaveni.profily()
 
     def _nacti_profily(self) -> None:
+        """Seznam profilů (výchozí s hvězdičkou); vybraný je ten, se kterým údaje karty souhlasí."""
+        self.profil.blockSignals(True)
         self.profil.clear()
         self.profil.addItem(tr("— vyberte —"))
-        self.profil.addItems(sorted(self._profily()))
+        vychozi = nastaveni.vychozi_profil()
+        p = self._profily()
+        for jm in sorted(p):
+            self.profil.addItem(jm + (tr(" (výchozí)") if jm == vychozi else ""), jm)
+        d = self.kazeta.digitalizace
+        shoda = next((jm for jm in sorted(p, key=lambda j: j != vychozi)
+                      if all((p[jm].get(k) or "") == getattr(d, k) for k in POLE_PROFILU)
+                      and any(p[jm].get(k) for k in POLE_PROFILU)), None)
+        self.profil.setCurrentIndex(max(0, self.profil.findData(shoda)) if shoda else 0)
+        self.profil.blockSignals(False)
 
     def _pouzij_profil(self, _):
-        p = self._profily().get(self.profil.currentText())
+        p = self._profily().get(self.profil.currentData() or "")
         if not p:
             return
         for jm in POLE_PROFILU:
@@ -225,11 +267,10 @@ class KartaKazety(QWidget):
 
     def _uloz_profil(self):
         jmeno, ok = QInputDialog.getText(self, tr("Profil pracoviště"), tr("Název profilu (např. Pracoviště 1):"),
-                                         text=self.profil.currentText() if self.profil.currentIndex() > 0 else "")
+                                         text=self.profil.currentData() or "")
         if not ok or not jmeno.strip():
             return
         p = self._profily()
         p[jmeno.strip()] = {jm: getattr(self, jm).text().strip() for jm in POLE_PROFILU}
-        self.nastaveni.setValue("profily", json.dumps(p, ensure_ascii=False))
+        nastaveni.uloz_profily(p)
         self._nacti_profily()
-        self.profil.setCurrentText(jmeno.strip())

@@ -12,7 +12,7 @@ from pathlib import Path
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 
-from ..jadro.model import ZADNA_DATA
+from ..jadro.model import VOLBY_ZVUKU, ZADNA_DATA
 from ..platformy import VSECHNY, podle_id
 
 AUTO = "auto"
@@ -59,7 +59,7 @@ def klic(hodnota: str | None) -> str:
     ikony."""
     if not hodnota or hodnota in ("?", "(neznámá)", "(nerozpoznáno)"):
         return NEROZPOZNANO
-    if hodnota in (ZADNA_DATA, "žádná data", "audio", ZADNA):
+    if hodnota in (ZADNA_DATA, "žádná data", "audio", ZADNA, *VOLBY_ZVUKU):
         return ZADNA
     if hodnota in (AUTO, NEROZPOZNANO):
         return hodnota

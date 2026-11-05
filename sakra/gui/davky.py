@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import soundfile as sf
-from PySide6.QtCore import QSettings, Qt, QThread, QTimer, Signal
+from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QFileDialog, QGroupBox, QHBoxLayout,
                                QHeaderView, QLabel, QLineEdit, QPushButton, QSplitter, QTableWidget, QTableWidgetItem,
@@ -27,6 +27,7 @@ from ..jadro.texty import pocet
 from ..metadata import excel
 from ..platformy import podle_id
 from ..projekt import PRIPONA, cislo_strany, inventarni_cislo, uloz, zpracuj
+from .. import nastaveni
 from ..i18n import tr, tr_data
 from . import ikony
 from .vyber_platformy import combo_platformy
@@ -105,6 +106,7 @@ class Zpracovani(QThread):
 
     def _zpracuj(self, i: int, p: Polozka):
         kazeta = excel.importuj(p.xlsx) if p.xlsx else Kazeta()
+        nastaveni.pouzij_vychozi_profil(kazeta)          # prázdné údaje o pracovišti z výchozího profilu
         kazeta.inventar.cislo = kazeta.inventar.cislo or p.inv
         kazeta.platforma = self.volby.get("platforma", "")
 
@@ -151,7 +153,7 @@ class Davky(QWidget):
     def __init__(self, okno, parent=None):
         super().__init__(parent)
         self.okno = okno
-        self.nastaveni = QSettings("HerniArchiv", "SAKRA")
+        self.nastaveni = nastaveni.nastaveni()
         self.polozky: list[Polozka] = []
         self.vlakno: Zpracovani | None = None
         self.filtr = "vse"
@@ -309,10 +311,10 @@ class Davky(QWidget):
         d = QFileDialog.getExistingDirectory(self, tr("Složka"), pole.text())
         if d:
             pole.setText(d)
-            self.nastaveni.setValue(klic, d)
+            nastaveni.zapamatuj_slozku(klic, d)
 
     def _sledovani(self, zapnuto: bool):
-        self.nastaveni.setValue("davky/sledovana", self.sledovana.text())
+        nastaveni.zapamatuj_slozku("davky/sledovana", self.sledovana.text())
         (self.casovac.start if zapnuto else self.casovac.stop)()
         if zapnuto:
             self._zkontroluj_slozku()

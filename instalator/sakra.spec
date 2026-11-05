@@ -19,7 +19,9 @@ from PyInstaller.utils.hooks import collect_data_files, copy_metadata
 def licence_knihoven():
     """Metadata (.dist-info) použitých knihoven – jsou v nich jejich licenční texty (LGPL, BSD, MIT…)."""
     out = []
-    for balik in ("PySide6_Essentials", "shiboken6", "numpy", "soundfile", "cffi", "openpyxl", "et_xmlfile", "zx",
+    for balik in ("PySide6_Essentials", "shiboken6", "numpy", "soundfile", "sounddevice", "pycparser", "cffi",
+                  "opencv-python-headless",
+                  "openpyxl", "et_xmlfile", "zx",
                   "py7zr", "pyzstd", "pybcj", "pyppmd", "inflate64", "multivolumefile", "brotli", "pycryptodomex",
                   "texttable", "psutil"):
         try:
@@ -27,6 +29,14 @@ def licence_knihoven():
         except Exception:  # balík v prostředí sestavení chybí nebo nemá metadata
             pass
     return out
+
+
+# kamera (OpenCV) jen když je v prostředí sestavení (volitelný doplněk „kamera“; ~40 MB)
+try:
+    import cv2  # noqa: F401
+    KAMERA = ["cv2"]
+except ImportError:
+    KAMERA = []
 
 
 # licence SAKRA vedle SAKRA.exe (program PolyForm Noncommercial, návod a logo CC BY-NC 4.0)
@@ -37,8 +47,10 @@ LICENCE += [(str(p), "licence-knihoven") for p in sorted((KOREN / "licence-kniho
 
 # emulátor ZX Spectra (snímky obrazovky) běží bez okna – SDL (okno, zvuk) se nebalí
 a = Analysis([str(KOREN / "instalator" / "spust.py")], pathex=[str(KOREN)], excludes=NEPOUZITE + ["sdl2"],
-             hiddenimports=["openpyxl.cell._writer", "zx._spectrum", "zx._file", "py7zr"],
+             hiddenimports=["openpyxl.cell._writer", "zx._spectrum", "zx._file", "py7zr", "sounddevice",
+                            "_sounddevice"] + KAMERA,
              datas=collect_data_files("zx", includes=["roms/*"])
+             + collect_data_files("_sounddevice_data")      # PortAudio (Windows, macOS)
              + [(str(KOREN / "sakra" / "dokumenty" / "SAKRA-navod.pdf"), "sakra/dokumenty"),
                 (str(KOREN / "sakra" / "data" / "logo.png"), "sakra/data"),
                 (str(KOREN / "sakra" / "data" / "ikona.png"), "sakra/data")] + LICENCE + licence_knihoven())

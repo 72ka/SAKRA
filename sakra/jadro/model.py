@@ -22,6 +22,7 @@ class Blok:
     oprava: str = ""               # jak byl blok opraven (prázdné = nebylo třeba)
     chybne_bajty: list[int] = field(default_factory=list)
     hrany: tuple[int, int] = (0, 0)  # rozsah v Pulzy.hrany (pro přesnou kopii signálu)
+    soucet_pasky: int | None = None  # kontrolní součet z pásky, pokud není v `data` (Commodore, Sharp)
 
 
 @dataclass
@@ -98,6 +99,7 @@ class Zaznam:
     zvyrazneni: str = ""           # sloupce (písmena) s tmavší barvou buňky – převzato ze vzoru
     soubor: Soubor | None = None   # technická data (není ve vzoru)
     nerozpoznano: bool = False
+    rucni_usek: bool = False       # řádek ručně označeného úseku (šum, hudba, řeč) – viz Strana.rucni_useky
 
     @property
     def stav(self) -> str:
@@ -109,16 +111,31 @@ class Zaznam:
 
 
 ZADNA_DATA = "žádná data (šum, řeč, hudba…)"     # ruční určení nerozpoznaného úseku: není to program
-NAZVY_BEZ_DAT = ("(žádná data)", "(zvukový záznam)")
+DRUHY_ZVUKU = ("šum", "hudba", "řeč")             # upřesnění úseku bez dat (ruční označení)
+VOLBY_ZVUKU = tuple(f"žádná data – {d}" for d in DRUHY_ZVUKU)   # volby v nabídce platformy
+NAZVY_BEZ_DAT = ("(žádná data)", "(zvukový záznam)") + tuple(f"({d})" for d in DRUHY_ZVUKU)
+
+
+@dataclass
+class RucniUsek:
+    """Ručně označený úsek strany (šum, hudba, řeč): není to program a analýza ho vynechá."""
+    zacatek: float                 # s
+    konec: float
+    druh: str                      # DRUHY_ZVUKU
+
+
+def druh_zvuku(text: str) -> str:
+    """Volba z nabídky („žádná data – hudba“) -> druh („hudba“), jinak ""."""
+    return next((d for d, v in zip(DRUHY_ZVUKU, VOLBY_ZVUKU) if text == v), "")
 
 
 def urci_platformu(z: Zaznam, text: str) -> None:
     """Ruční určení nerozpoznaného úseku: platforma ze seznamu, „(neznámá)“, nebo žádná data (typ Audio –
     do balíčku jen výřez WAV, ne CSW)."""
-    if text == ZADNA_DATA:
+    if text == ZADNA_DATA or druh_zvuku(text):
         z.typ, z.platforma = "Audio", ""
-        if z.nazev in ("", "(nerozpoznáno)"):
-            z.nazev = "(žádná data)"
+        if z.nazev in ("", "(nerozpoznáno)") + NAZVY_BEZ_DAT:
+            z.nazev = f"({druh_zvuku(text)})" if druh_zvuku(text) else "(žádná data)"
         return
     if z.typ == "Audio":
         z.typ = "Data"
@@ -135,10 +152,12 @@ class Strana:
     vzorkovani: str = ""
     format: str = ""
     kanal: int = 0                   # skutečně použitý kanál (0 = levý)
-    volba_kanalu: str = "auto"       # auto (silnější) / levy / pravy
+    volba_kanalu: str = "auto"       # auto (silnější) / levy / pravy / soucet (L + P s korekcí posunu)
+    posun_kanalu: float | None = None  # u součtu: posun P proti L v µs; None = změřit automaticky
     polarita: str = "auto"           # auto / normalni / obracena
     zaznamy: list[Zaznam] = field(default_factory=list)
     signal: dict[str, Any] = field(default_factory=dict)
+    rucni_useky: list[RucniUsek] = field(default_factory=list)   # šum/hudba/řeč – analýza je vynechá
 
 
 @dataclass
@@ -225,7 +244,7 @@ def _z_json(typ, d):
 _TYPY_POLI = {
     ("Kazeta", "inventar"): Inventar, ("Kazeta", "digitalizace"): Digitalizace,
     ("Kazeta", "strany"): Strana, ("Strana", "zaznamy"): Zaznam,
-    ("Zaznam", "soubor"): Soubor, ("Soubor", "bloky"): Blok,
+    ("Zaznam", "soubor"): Soubor, ("Soubor", "bloky"): Blok, ("Strana", "rucni_useky"): RucniUsek,
 }
 
 

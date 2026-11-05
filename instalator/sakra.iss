@@ -1,5 +1,8 @@
-; Inno Setup 6 – instalátor SAKRA pro Windows (x64). Nejdřív sestavit dist\SAKRA (sestav_windows.bat).
-#define Verze "0.3.0a1"
+﻿; Inno Setup 6 – instalátor SAKRA pro Windows (x64). Nejdřív sestavit dist\SAKRA (sestav_windows.bat).
+; verze jde zadat zvenku (ISCC /DVerze=…, automatické sestavení na GitHubu)
+#ifndef Verze
+  #define Verze "0.3.0a2"
+#endif
 
 [Setup]
 AppId={{6E4B7D1A-2C9F-4D1E-9B6A-5A8C3F0D2E71}

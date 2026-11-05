@@ -6,8 +6,8 @@ from PySide6.QtGui import QBrush, QColor, QFont
 from PySide6.QtWidgets import QComboBox, QStyledItemDelegate
 
 from ..jadro.analyza import popis_stavu
-from ..jadro.model import (FUNKCNI_EDIT, FUNKCNI_ORIG, OBSAHY, TURBA, TYPY, ZADNA_DATA, Kazeta, Zaznam, cas_text,
-                           cas_z_textu, urci_platformu)
+from ..jadro.model import (FUNKCNI_EDIT, FUNKCNI_ORIG, OBSAHY, TURBA, TYPY, VOLBY_ZVUKU, ZADNA_DATA, Kazeta, Zaznam,
+                           cas_text, cas_z_textu, urci_platformu)
 from ..metadata import sablona
 from ..platformy import RUCNI, VSECHNY
 from ..i18n import tr, tr_data
@@ -15,10 +15,10 @@ from . import ikony, vzhled
 
 SLOUPCE = [(tr("Strana"), "_strana"), (tr("Stav"), "_stav")] + [(tr(z), pole) for _, z, pole in sablona.SLOUPCE]
 PISMENO = {pole: sl for sl, _, pole in sablona.SLOUPCE}
-PLATFORMY = list(dict.fromkeys([p.nazev for p in VSECHNY] + RUCNI + [ZADNA_DATA]))
+PLATFORMY = list(dict.fromkeys([p.nazev for p in VSECHNY] + RUCNI + [ZADNA_DATA, *VOLBY_ZVUKU]))
 VOLBY = {"typ": TYPY, "obsah": OBSAHY, "funkcni_orig": FUNKCNI_ORIG, "funkcni_edit": FUNKCNI_EDIT, "turbo": TURBA,
          "platforma": PLATFORMY}
-ZASTUPNE = {"(nerozpoznáno)", "(žádná data)", "(zvukový záznam)"}     # zástupné názvy úseků bez programu
+ZASTUPNE = {"(nerozpoznáno)", "(žádná data)", "(zvukový záznam)", "(šum)", "(hudba)", "(řeč)"}     # zástupné názvy úseků bez programu
 AUTOMATICKA = {"cas_od", "cas_do", "typ", "platforma", "turbo", "nazev_bloku", "typ_bloku"}
 STAVY = {"ok": (tr("✓ v pořádku"), "#2EA866"), "opraveno": (tr("✓ opraveno"), "#D08A10"),
          "neověřeno": (tr("~ bez součtu"), "#4A86C8"),

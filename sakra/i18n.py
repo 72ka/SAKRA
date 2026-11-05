@@ -51,8 +51,8 @@ def nacti() -> str:
     j = os.environ.get("SAKRA_JAZYK", "")
     if j not in JAZYKY:
         try:
-            from PySide6.QtCore import QSettings
-            j = QSettings("HerniArchiv", "SAKRA").value("jazyk", "") or ""
+            from .nastaveni import nastaveni
+            j = nastaveni().value("jazyk", "") or ""
         except ImportError:
             j = ""
     nastav(j if j in JAZYKY else vychozi())
@@ -60,8 +60,8 @@ def nacti() -> str:
 
 
 def uloz(jazyk: str) -> None:
-    from PySide6.QtCore import QSettings
-    QSettings("HerniArchiv", "SAKRA").setValue("jazyk", jazyk)
+    from .nastaveni import nastaveni
+    nastaveni().setValue("jazyk", jazyk)
 
 
 def tr(text: str) -> str:

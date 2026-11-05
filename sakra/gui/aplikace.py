@@ -72,6 +72,7 @@ def spust(soubor: str | None = None) -> int:
     okno = HlavniOkno()
     okno.pouzij_vzhled()
     okno.show()
+    vzhled.hlidej_system(app, okno.pouzij_vzhled)
     if soubor:
         if soubor.endswith(PRIPONA):
             okno.otevri_projekt(soubor)

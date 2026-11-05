@@ -12,6 +12,7 @@ from ..jadro.model import Zaznam, cas_text
 from ..platformy import podle_id
 from ..i18n import tr, tr_data
 from . import ikony
+from ..jadro.soucty import soucty_bloku
 from .stul_panely import MrizkaBloku, nadpis_sekce
 
 
@@ -33,6 +34,21 @@ POPISY = {  # klíč v Soubor.info -> (popisek, převod hodnoty)
 }
 SKRYT = {"texty", "basic", "casti", "casovani", "turbo"}
 
+
+
+
+def _soucty_html(platforma: str, blok) -> str:
+    """Součty bloku: na pásce / spočteno (zeleně shoda, červeně rozdíl)."""
+    soucty = soucty_bloku(platforma, blok)
+    if soucty is None:
+        return f"<span style='color:#8A93A3'>{html.escape(tr('bez součtu'))}</span>"
+    radky = []
+    for popis, pasek, spocteno, cislic in soucty:
+        barva = "#2EA866" if pasek == spocteno else "#E04848"
+        na_pasce = "?" if pasek is None else f"{pasek:0{cislic}X}"
+        radky.append(f"{html.escape(tr_data(popis))}: {na_pasce} / "
+                     f"<span style='color:{barva}'>{spocteno:0{cislic}X}</span>")
+    return "<br>".join(radky)
 
 class Prohlizec(QTextBrowser):
     """Text detailu; obrázky náhledu (src="nahled:N") bere z paměti."""
@@ -166,7 +182,7 @@ class Detail(QWidget):
             tr(
                 "<h4 style='margin:10px 0 4px'>Bloky</h4><table cellspacing=0 cellpadding=2 "
                 "style='border-collapse:collapse'><tr "
-                "style='background:#F6B26B;color:#1B1F27'><th>Č.</th><th>Typ</th><th>Od</th><th>Do</th><th>B</th><th></th><th "
+                "style='background:#F6B26B;color:#1B1F27'><th>Č.</th><th>Typ</th><th>Od</th><th>Do</th><th>B</th><th></th><th>Součet (pásek / spočteno)</th><th "
                 "align=left>Oprava / chyba</th></tr>"
             )
         )
@@ -178,7 +194,7 @@ class Detail(QWidget):
                 tr(
                     "<tr><td align=right nowrap>{0}</td><td nowrap>{1}</td><td nowrap>{2}</td><td "
                     "nowrap>{3}</td><td align=right>{4}</td><td style='color:{5}' "
-                    "align=center>{6}</td><td>{7}</td></tr>"
+                    "align=center>{6}</td><td nowrap style='font-family:monospace'>{8}</td><td>{7}</td></tr>"
                 ).format(
                     '' if b.cislo is None else b.cislo,
                     e(tr_data(b.typ)),
@@ -188,6 +204,7 @@ class Detail(QWidget):
                     bar,
                     st,
                     e(pozn),
+                    _soucty_html(s.platforma, b),
                 )
             )
         casti.append("</table>")

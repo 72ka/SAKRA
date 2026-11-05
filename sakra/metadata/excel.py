@@ -126,7 +126,8 @@ def _list_sakra(ws, kazeta: Kazeta) -> None:
         c.fill = _vypln(S.BARVA_HLAVICKA)
     for s in kazeta.strany:
         ws.append([f"Nahrávka strany {s.cislo}: {Path(s.nahravka).name}", None, None,
-                   f"{s.vzorkovani}, {s.format}, délka {cas_text(s.delka)}, kanál {s.kanal + 1}"])
+                   f"{s.vzorkovani}, {s.format}, délka {cas_text(s.delka)}, "
+                   f"{'kanál L+P (součet)' if s.kanal < 0 else f'kanál {s.kanal + 1}'}"])
         for z in s.zaznamy:
             f = z.soubor
             info = {k: v for k, v in (f.info if f else {}).items() if k not in ("texty", "rychlost")}

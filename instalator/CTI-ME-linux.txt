@@ -1,0 +1,22 @@
+SAKRA – Linux x86_64
+====================
+a Swiss Army Knife for Retrogaming Archaeologists
+© 2025–2026 Jan Heřman (72ka) · vyrobeno pro potřeby Herního archivu (www.herniarchiv.cz)
+Chyby a náměty: 2hp@seznam.cz
+
+Požadavky
+  64bitový Linux s glibc 2.35 nebo novější (Ubuntu 22.04+, Debian 12+, Linux Mint 21+, Fedora 36+).
+  Systémové knihovny pro Qt (Debian/Ubuntu):
+    sudo apt install libgl1 libegl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 \
+        libxcb-shape0 libfontconfig1 alsa-utils
+  Python není potřeba (je přibalený).
+
+Spuštění
+  ./SAKRA                     grafická aplikace
+  ./sakra-cli analyzuj …      zpracování z příkazové řádky (./sakra-cli --help)
+  Návod: Nápověda → Návod (F1), soubor _internal/sakra/dokumenty/SAKRA-navod.pdf
+
+Licence
+  Program: PolyForm Noncommercial 1.0.0 – zdarma pro nekomerční použití, autora je třeba uvádět.
+  Návod, logo a ikona: CC BY-NC 4.0. Komerční použití jen s písemným souhlasem autora: 2hp@seznam.cz
+  Texty licencí: _internal/LICENSE, _internal/NOTICE.txt, _internal/THIRD-PARTY-NOTICES.txt

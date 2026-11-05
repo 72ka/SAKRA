@@ -359,6 +359,33 @@ class Gui(unittest.TestCase):
         vzhled.pouzij(APP, vzhled.Nastaveni("svetle", "navrh", False))
         o.close()
 
+    def test_tmavy_system_az_po_startu(self):
+        """Systém hlásí tmavý režim až po zobrazení okna (Windows, Linux s portálem): aplikace se
+        přepne sama, bez návštěvy Nastavení."""
+        global APP
+        APP = QApplication.instance() or QApplication([])
+        from unittest import mock
+        from sakra.gui import vzhled
+        system = {"tmavy": False}
+        aktivni = {"ano": True}
+        with mock.patch.object(vzhled, "_system_tmave", lambda app: system["tmavy"]), \
+                mock.patch.object(vzhled.Nastaveni, "nacti",
+                                  classmethod(lambda cls: cls("system" if aktivni["ano"] else "svetle", "navrh"))):
+            vzhled.pouzij(APP)
+            o = HlavniOkno()
+            o.pouzij_vzhled()
+            o.show()
+            self.assertFalse(vzhled.je_tmave())
+            system["tmavy"] = True
+            vzhled.hlidej_system(APP, o.pouzij_vzhled)
+            for _ in range(20):
+                APP.processEvents()
+            self.assertTrue(vzhled.je_tmave())
+            self.assertLess(APP.palette().window().color().lightness(), 80)
+            aktivni["ano"] = False
+        vzhled.pouzij(APP, vzhled.Nastaveni("svetle", "navrh", False))
+        o.close()
+
     def test_rucni_uprava(self):
         global APP
         APP = QApplication.instance() or QApplication([])
@@ -401,6 +428,151 @@ class Gui(unittest.TestCase):
         o.akce_uprava.setChecked(False)
         self.assertEqual(z.stav, "opraveno")
         self.assertFalse(o.osa.rezim_upravy)
+        o.close()
+
+
+    def test_rucni_uprava_zachova_priblizeni(self):
+        """Uživatel si přiblíží poškozené místo a pak zapne ruční úpravu: pohled zůstane."""
+        global APP
+        APP = QApplication.instance() or QApplication([])
+        import numpy as np
+        from sakra.jadro.analyza import analyzuj_stranu
+        tmp = Path(tempfile.mkdtemp())
+        pulzy = pulzy_tesla(soubor_tesla(b"KORAB", np.random.default_rng(6).integers(0, 256, 700, np.uint8).tobytes()),
+                            44100)
+        uloz_wav(tmp / "cista.wav", signal_z_pulzu(pulzy, 44100), 44100)
+        b3 = next(b for b in analyzuj_stranu(tmp / "cista.wav", 1).soubory[0].bloky if b.cislo == 3)
+        konce = np.cumsum([int(n) for n in pulzy])
+        k = int(np.searchsorted(konce, (b3.zacatek + 0.6 * (b3.konec - b3.zacatek)) * 44100))
+        t_prechodu = konce[k] / 44100
+        poskozene = pulzy[:k] + [pulzy[k] + pulzy[k + 1]] + pulzy[k + 2:]
+        uloz_wav(tmp / "HH00078 (1).wav", signal_z_pulzu(poskozene, 44100), 44100)
+        o = HlavniOkno()
+        o.resize(1400, 900)
+        o.show()
+        o.prepni_rezim("stul")
+        o.otevri_nahravky([str(tmp / "HH00078 (1).wav")])
+        self._cekej(lambda: not (o.ukol and o.ukol.isRunning()))
+        o.tabulka.selectRow(0)
+        APP.processEvents()
+        o.osa._nastav_rozsah(t_prechodu - 0.003, t_prechodu + 0.003)     # přiblížení na poškozené místo
+        pohled = (o.osa.od, o.osa.do)
+        o.akce_uprava.setChecked(True)
+        APP.processEvents()
+        self.assertEqual((o.osa.od, o.osa.do), pohled)
+        self.assertLessEqual(o.uprava["b"].zacatek, t_prechodu)
+        self.assertGreaterEqual(o.uprava["b"].konec, t_prechodu)
+        o._uprava_signalu(t_prechodu, False)                             # oprava hned, bez hledání
+        self.assertIn("sedí", o.stav_upravy.text())
+        o.akce_uprava.setChecked(False)
+        o.close()
+
+
+    @staticmethod
+    def _polozky(strom):
+        out = []
+        for i in range(strom.topLevelItemCount()):
+            it = strom.topLevelItem(i)
+            out += [it.child(j) for j in range(it.childCount())]
+        return out
+
+    def test_oznaceni_z_obsahu_kazety(self):
+        """Pravé tlačítko na záznamu v Obsahu kazety: označit jako řeč (program zůstane), pak zrušit."""
+        global APP
+        APP = QApplication.instance() or QApplication([])
+        import numpy as np
+        from PySide6.QtCore import Qt
+        tmp = Path(tempfile.mkdtemp())
+        rng = np.random.default_rng(7)
+        hluk = rng.normal(0, 0.3, 44100 * 3).astype(np.float32)             # řeč/šum před programem
+        a = signal_z_pulzu(pulzy_tesla(soubor_tesla(b"PROGRAM", rng.integers(0, 256, 300, np.uint8).tobytes()),
+                                       44100), 44100)
+        uloz_wav(tmp / "HH00093 (1).wav", np.concatenate([np.zeros(22050, np.float32), hluk,
+                                                         np.zeros(44100, np.float32), a]), 44100)
+        o = HlavniOkno()
+        o.resize(1400, 900)
+        o.show()
+        o.prepni_rezim("stul")
+        o.otevri_nahravky([str(tmp / "HH00093 (1).wav")])
+        self._cekej(lambda: not (o.ukol and o.ukol.isRunning()))
+        nerozp = [it for it in self._polozky(o.strom)
+                  if it.data(0, Qt.ItemDataRole.UserRole)[1].nerozpoznano]
+        self.assertTrue(nerozp)
+        nabidka = o.nabidka_stromu(nerozp[0])
+        next(a for a in nabidka.actions() if "řeč" in a.text() or "speech" in a.text()).trigger()
+        APP.processEvents()
+        nazvy = [z.nazev for _, z in o.model.radky]
+        self.assertIn("(řeč)", nazvy)
+        self.assertIn("PROGRAM", nazvy)
+        rec = next(it for it in self._polozky(o.strom) if it.data(0, Qt.ItemDataRole.UserRole)[1].rucni_usek)
+        next(a for a in o.nabidka_stromu(rec).actions() if a.isEnabled()).trigger()
+        APP.processEvents()
+        self.assertEqual(o.kazeta.strany[0].rucni_useky, [])
+        self.assertIn("PROGRAM", [z.nazev for _, z in o.model.radky])
+        o.close()
+
+    def test_rucni_oznaceni_useku(self):
+        """Shift + tažení vybere úsek, pravé tlačítko ho označí jako hudbu: program zmizí z obsahu,
+        přibude řádek (hudba) a nová analýza strany označení zachová."""
+        global APP
+        APP = QApplication.instance() or QApplication([])
+        import numpy as np
+        from PySide6.QtCore import QPoint, Qt
+        from PySide6.QtTest import QTest
+        tmp = Path(tempfile.mkdtemp())
+        rng = np.random.default_rng(5)
+        a = signal_z_pulzu(pulzy_tesla(soubor_tesla(b"PRVNI", rng.integers(0, 256, 300, np.uint8).tobytes()),
+                                       44100), 44100)
+        b = signal_z_pulzu(pulzy_tesla(soubor_tesla(b"DRUHY", rng.integers(0, 256, 300, np.uint8).tobytes()),
+                                       44100), 44100)
+        uloz_wav(tmp / "HH00091 (1).wav", np.concatenate([a, b]), 44100)
+        o = HlavniOkno()
+        o.resize(1400, 900)
+        o.show()
+        o.prepni_rezim("stul")
+        o.otevri_nahravky([str(tmp / "HH00091 (1).wav")])
+        self._cekej(lambda: not (o.ukol and o.ukol.isRunning()))
+        nazvy = lambda: [z.nazev for _, z in o.model.radky]      # noqa: E731
+        self.assertIn("DRUHY", nazvy())
+        druhy = next(z for _, z in o.model.radky if z.nazev == "DRUHY")
+        osa = o.osa
+        osa.cele()
+        APP.processEvents()
+        x0 = int(osa._x(druhy.cas_od - 0.3))
+        x1 = int(osa._x(min(druhy.cas_do + 0.3, osa.delka - 0.01)))
+        y = osa.height() // 2
+        QTest.mousePress(osa, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier, QPoint(x0, y))
+        QTest.mouseMove(osa, QPoint(x1, y))
+        QTest.mouseRelease(osa, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier, QPoint(x1, y))
+        self.assertIsNotNone(osa.vyber)
+        self.assertLess(osa.vyber[0], druhy.cas_od)
+        self.assertGreater(osa.vyber[1], druhy.cas_do - 0.1)
+        nabidka = osa.sestav_nabidku(osa.vyber[0] + 0.1)         # pravé tlačítko
+        polozka = next(a for a in nabidka.actions() if "hudba" in a.text() or "music" in a.text())
+        polozka.trigger()
+        APP.processEvents()
+        self.assertNotIn("DRUHY", nazvy())
+        self.assertIn("(hudba)", nazvy())
+        self.assertTrue(any(ob.rucni for ob in osa.v.oblasti))
+        self.assertFalse(o.grab().isNull())
+        o.analyzuj({1: tmp / "HH00091 (1).wav"})                  # Analyzovat znovu: označení zůstává
+        self._cekej(lambda: not (o.ukol and o.ukol.isRunning()))
+        self.assertNotIn("DRUHY", nazvy())
+        self.assertIn("(hudba)", nazvy())
+        self.assertIn("PRVNI", nazvy())
+        # Obsah kazety: pravé tlačítko na řádku (hudba) -> zrušit, na nerozpoznaném úseku -> označit
+        polozka_hudby = next(it for it in self._polozky(o.strom) if "(hudba)" in it.text(0)
+                             or "(music)" in it.text(0))
+        nabidka = o.nabidka_stromu(polozka_hudby)
+        self.assertTrue(any("„" in a.text() or "“" in a.text() for a in nabidka.actions()))
+        nabidka = o.nabidka_stromu(o.strom.topLevelItem(0))                  # strana: nic k označení
+        self.assertFalse(any(a.isEnabled() for a in nabidka.actions()))
+        r = o.kazeta.strany[0].rucni_useky[0]
+        nabidka = osa.sestav_nabidku((r.zacatek + r.konec) / 2)    # pravé tlačítko nad označeným úsekem
+        next(a for a in nabidka.actions() if "„" in a.text() or "“" in a.text()).trigger()
+        APP.processEvents()
+        self.assertNotIn("(hudba)", nazvy())
+        self.assertEqual(o.kazeta.strany[0].rucni_useky, [])
         o.close()
 
 

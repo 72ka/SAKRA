@@ -5,7 +5,7 @@ Digitalizace a archivace audiokazet s programy pro staré počítače.
 Autor: Jan Heřman, alias 72ka, 2026. Vyrobeno pro potřeby Herního archivu (www.herniarchiv.cz)."""
 from pathlib import Path
 
-__version__ = "0.3.0a1"          # alpha
+__version__ = "0.3.0a2"          # alpha
 
 AKRONYM = "a Swiss Army Knife for Retrogaming Archaeologists"
 _Z = "<b style='color:#E39A2B'>{}</b>"

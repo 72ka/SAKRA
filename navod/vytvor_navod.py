@@ -89,7 +89,8 @@ NOVA = "<p style='page-break-before: always'></p>"
 # ------------------------------------------------------------------------------------------- kapitoly
 KAPITOLY: list[tuple[str, str, bool]] = []
 # kapitoly, které začínají na nové stránce (krátké navazují za předchozí)
-NA_NOVE_STRANE = {"Co je SAKRA", "Průvodce", "Pracovní stůl", "Ruční oprava poškozeného bloku",
+NA_NOVE_STRANE = {"Co je SAKRA", "Nahrávání z magnetofonu a ladění hlavy", "Průvodce", "Pracovní stůl",
+                  "Ruční oprava poškozeného bloku",
                   "Archivní balíček", "Dávkové zpracování", "Podporované počítače"}
 
 
@@ -172,7 +173,46 @@ i strana; jinak je jde nastavit ručně.</li>
 v Dávkách se z ní načtou metadata.</li>
 </ul>
 """ + tip("Nahrajte vždy <b>obě strany</b>. Programy bývají na kazetě vícekrát a poškozený blok často "
-          "opraví kopie z druhé strany."))
+          "opraví kopie z druhé strany.") + """
+<p>Nahrávat lze i přímo v SAKRA – viz další kapitola.</p>
+""")
+
+kapitola("Nahrávání z magnetofonu a ladění hlavy", """
+<p>Stranu kazety lze nahrát přímo ze zvukového vstupu počítače (line-in): <b>Soubor → Nahrát z magnetofonu…</b>
+(Ctrl+R), nebo v Průvodci v kroku Nahrávka tlačítko <b>Nahrát z magnetofonu…</b>. Nahrávka se uloží jako WAV
+s názvem <b>&lt;inventární číslo&gt; (&lt;strana&gt;).wav</b> a pak se s ní pracuje jako s každou jinou.</p>
+<h2>Postup</h2>
+<ol>
+<li>Zvolte vstup, vzorkování (44,1 / 48 / 96 kHz), bitovou hloubku (16 / 24 bitů) a stereo nebo mono.
+Vyplňte inventární číslo, stranu a složku. Volby si SAKRA pamatuje.</li>
+<li>Pusťte kazetu a stiskněte <b>Sledovat úroveň</b> – nic se neukládá, jen se ukazuje úroveň a ladění hlavy.
+Hlasitost nastavte tak, aby špičky sahaly do žluté, nikdy do červené (přebuzení).</li>
+<li>Seřiďte hlavu (viz níže).</li>
+<li>Přetočte kazetu na začátek, stiskněte <b>● Nahrávat</b> a pusťte magnetofon. Na konci strany
+<b>■ Zastavit</b>. Hlásí-li SAKRA přebuzení, snižte úroveň a stranu nahrajte znovu.</li>
+<li>Strana se sama přepne na další – otočte kazetu a nahrajte ji stejně. Nakonec <b>Otevřít v SAKRA</b>.</li>
+</ol>
+<h2>Ladění hlavy (azimut)</h2>
+<p>Hlava magnetofonu musí stát přesně kolmo na pásek, jinak se rozmazávají krátké pulzy a čtení je
+nespolehlivé. Kazety bývají nahrané na jiném magnetofonu, proto se vyplatí hlavu seřídit podle kazety, kterou
+se chystáte nahrát. Při sledování i nahrávání ukazuje SAKRA z posledního půl sekundy zvuku:</p>
+""" + tab([("Histogram délek pulzů", "Jak dlouhé jsou půlvlny signálu (0–1500 µs). Hlavní špička je oranžová. "
+                                     "Čím užší a vyšší špičky, tím lépe."),
+           ("Rozptyl ±%", "Šířka hlavní špičky; v závorce nejlepší dosažená hodnota, aby bylo vidět, zda se "
+                          "otáčením šroubku zlepšuje. Dobré čtení mívá do ±3 %."),
+           ("Posun kanálů L/R", "U sterea: data jsou na obou stopách stejná, šikmá hlava je časově posune. "
+                                "Ideál 0 µs – ukazatel je v zelené zóně (±20 µs), dál žlutý a červený. "
+                                "Nesouhlasí-li kanály vůbec (mono magnetofon, prázdná stopa), SAKRA to napíše.")],
+          sirky=(150, 516)) + """
+<p>Pusťte zaváděcí tón nebo data a jemně otáčejte šroubkem azimutu (bývá vedle hlavy, přístupný otvorem
+v krytu kazetového prostoru), až je oranžová špička nejužší a posun kanálů nejblíž 0 µs. Obě měřítka se
+obvykle zlepšují současně.</p>
+""" + obr("ladeni_spatne", "Šikmá hlava: kanály posunuté o víc než 100 µs (ukazatel červeně vlevo), širší špička.", 520)
+    + obr("ladeni_serizeno", "Po seřízení: posun kanálů do 10 µs (ukazatel v zelené zóně), užší špička a menší rozptyl.", 520)
+    + obr("ladeni_mono", "Jedna stopa prázdná (mono magnetofon): posun kanálů nejde změřit, ladí se jen "
+                         "podle histogramu.", 520) + tip(
+    "Na Linuxu potřebuje nahrávání knihovnu <b>libportaudio2</b>, nebo programy <b>parecord</b> "
+    "(pulseaudio-utils) či <b>arecord</b> (alsa-utils). Ve Windows a macOS stačí zvuková karta."))
 
 kapitola("Okno aplikace", """
 <p>V horní části okna je nabídka a přepínač režimů:</p>
@@ -206,7 +246,10 @@ neztratí a lze ho zpracovat znovu s jinou volbou.</p>
 <p>Údaje o digitalizaci a kazetě pro hlavičku tabulky metadat: magnetofon, zvuková karta, DI-box, autor
 digitalizace, výrobce a materiál kazety a další. <b>Profil pracoviště</b> si údaje o vybavení zapamatuje
 a příště je vyplní jedním výběrem. Vzorkování a formát se doplní z nahrávky. Sem patří i fotky kazety
-a obalu.</p>
+a obalu: <b>Přidat fotky…</b> ze souborů, nebo <b>Z kamery…</b> rovnou z připojené kamery (USB webkamera) –
+živý náhled, <b>Vyfotit</b> uloží snímek jako „HH08518 foto 1.jpg“ a po zavření se snímky přidají ke kazetě.
+Kamera potřebuje doplněk OpenCV (spouštěcí skripty ho instalují samy, jinak
+<b>pip install opencv-python-headless</b>).</p>
 """ + obr("pruvodce3", "Krok 3 – co SAKRA na pásce našla.") + """
 <h2>3. Platforma</h2>
 <p>Při přechodu na tento krok proběhne analýza nahrávek. SAKRA ukáže, které počítače na pásce našla
@@ -269,12 +312,21 @@ aplikaci svou ikonu – v průvodci, ve stromu, v tabulce, v detailu programu i 
 (ruční údaje v tabulce zůstanou, ruční úpravy signálu se zahodí – SAKRA se předem zeptá). Volba se uloží
 s projektem.</p>
 """ + tab([("Kanál", "<b>Auto</b> – kanál se silnějším signálem (který se použil, je vidět v řádku nad průběhem strany), "
-                     "<b>Levý</b>, <b>Pravý</b>. U mono nahrávky je výběr vypnutý."),
+                     "<b>Levý</b>, <b>Pravý</b>, <b>L+P (součet)</b> – obě stopy srovnané o posun a sečtené "
+                     "(u sešikmené hlavy nebo slabé nahrávky lepší odstup od šumu). U mono nahrávky je výběr vypnutý."),
+           ("Posun P", "Jen u součtu: o kolik je pravá stopa posunutá proti levé (µs, kladně = zpožďuje se). "
+                       "<b>auto</b> = změří se z nahrávky. Při ladění šipkami se hned ukazuje zobrazení „Součet L+P“, "
+                       "nová analýza proběhne po Enteru."),
            ("Polarita", "<b>Normální</b> – signál, jak je nahraný. <b>Obrácená</b> – signál se před čtením "
                         "převrátí (např. při obráceně zapojeném kabelu nebo magnetofonu, který obrací fázi). "
                         "<b>Auto</b> – čte se normálně; zůstane-li vadný blok, zkusí se i obrácený signál "
                         "a ponechá se lepší výsledek; vyhraje-li obrácená, je to vidět v řádku nad průběhem strany.")],
           sirky=(110, 556)) + """
+<p><b>Zobrazit</b> nad časovou osou určuje, co se u stereo nahrávky kreslí (analýzu to nemění): <b>Vstup
+analýzy</b> (to, co čtou dekodéry), <b>Levá stopa</b>, <b>Pravá stopa</b>, <b>Součet L+P</b> nebo <b>Obě stopy</b>
+pod sebou – po přiblížení na pár milisekund je vidět, jak je pravá stopa posunutá. Bublina u výběru ukazuje
+změřený posun a shodu stop; nesouhlasí-li stopy (jiný obsah, jedna prázdná), součet čtení spíš zhorší.</p>
+""" + obr("stereo_obe", "Zobrazení Obě stopy: pravá stopa je proti levé zpožděná (sešikmená hlava).", 560) + """
 <h2>Bloky dat</h2>
 <p>Každý blok vybraného programu je v pravém panelu jedno políčko: <font color='#2EA866'><b>zelené</b></font>
 = bez chyby, <font color='#E3A72F'><b>oranžové</b></font> = opravené (z kopie, opakovaným čtením nebo ručně),
@@ -285,21 +337,37 @@ kliknutí blok vybere a přiblíží na průběhu strany – odtud se dá rovnou
            ("tažení myší", "posun"),
            ("kliknutí", "výběr programu v daném místě"),
            ("dvojklik / Celá strana", "zobrazení celé strany"),
+           ("Shift + tažení", "výběr úseku"),
+           ("pravé tlačítko", "označit výběr jako šum, hudbu nebo řeč; zrušit označení"),
            ("mezerník / ▶ Přehrát", "přehrání vybraného úseku"),
            ("■", "zastavení přehrávání")], sirky=(170, 496)) + """
 <p>Při velkém přiblížení jsou vidět jednotlivé vzorky a přechody signálu přes nulu; poškozené bloky jsou
 označené červeně.</p>
+<h2>Slabá místa signálu</h2>
+<p>Nad průběhem strany jsou čárky tam, kde úroveň signálu v bloku klesne proti okolí:
+<font color='#F08A24'><b>oranžová</b></font> = slabé čtení (pod 50 %), <font color='#E03A3A'><b>červená</b></font>
+= výpadek (pod 25 %, navíc podbarvený). Najetí myší na čárku ukáže úroveň a délku. Čárky pomáhají najít
+místo pro ruční úpravu; ne každé slabé místo musí způsobit chybu.</p>
+<h2>Šum, hudba a řeč</h2>
+<p>Úsek, který není program (šum, hudba, mluvené slovo, znělka), lze označit ručně: vyberte ho na časové ose
+<b>Shift + tažením</b> (nebo klikněte na program či úsek) a pravým tlačítkem zvolte <b>Označit jako: šum /
+hudba / řeč</b>. Totéž nabízí pravé tlačítko na záznamu v <b>Obsahu kazety</b>. Úsek dostane vlastní řádek
+(do balíčku jako výřez WAV) a analýza ho vynechá i při dalším zpracování. Rozpoznané programy se z výběru
+odečtou, takže se přeznačí jen dosud nerozpoznaná část. Pravé tlačítko nad označeným úsekem nabídne
+<b>Zrušit označení</b>.</p>
 """ + obr("osa_vzorky", "Silně přiblížená časová osa: jednotlivé vzorky a přechody přes nulu.") + """
 <h2>Tabulka Obsah pásky</h2>
 <p>Sloupce odpovídají vzoru Herního archivu. <b>Žlutě podbarvené</b> buňky vyplnila SAKRA, ostatní doplní
 člověk. Sloupce s rozbalovacím seznamem nabízejí hodnoty podle komentářů vzoru; ve sloupci Platforma lze
-nerozpoznanému úseku určit počítač ručně, nebo zvolit <b>žádná data (šum, řeč, hudba…)</b>. Ručně vyplněné údaje
+nerozpoznanému úseku určit počítač ručně, nebo zvolit <b>žádná data</b> (případně upřesnit
+<b>žádná data – šum / hudba / řeč</b>). Ručně vyplněné údaje
 (i určení nerozpoznaných úseků) se při nové analýze zachovají.</p>
 """ + obr("karta", "Záložka Kazeta: údaje o digitalizaci, inventář, popis kazety a fotky.", 560) + """
 <h2>Detail programu</h2>
 <p>Údaje z hlaviček (název, typ, délka, adresa, autostart…), části programu, stav a provedené opravy,
 seznam bloků a <b>náhled</b>: u ZX Spectra výpis BASICu a obrazovky, u SAPI-1 text, u ostatních začátek dat
-v šestnáctkovém zápisu. Tlačítko <b>Uložit tento program…</b> uloží jen vybraný program do zvolené složky.</p>
+v šestnáctkovém zápisu. V seznamu bloků je u každého bloku <b>kontrolní součet</b> uložený na pásce
+a spočtený z přečtených dat (zeleně shoda, červeně rozdíl), u formátů s hlavičkou zvlášť hlavička a data. Tlačítko <b>Uložit tento program…</b> uloží jen vybraný program do zvolené složky.</p>
 """)
 
 kapitola("Stavy programů", """
@@ -419,7 +487,8 @@ podle názvu, takže to funguje i po nové analýze.</li>
 </ul>
 """)
 
-kapitola("Nastavení", obr("nastaveni", "Soubor → Nastavení… (Ctrl+,)", 420) + tab(
+kapitola("Nastavení", "<p>Soubor → Nastavení… (Ctrl+,) má čtyři záložky.</p><h2>Vzhled</h2>"
+         + obr("nastaveni", "Záložka Vzhled", 480) + tab(
     [("Barvy", "Podle systému, Světlé nebo Tmavé."),
      ("Styl", "Moderní (zaoblené panely, jantarová tlačítka, přepínač režimů jako segmenty) nebo "
               "Klasický (Fusion)."),
@@ -427,11 +496,36 @@ kapitola("Nastavení", obr("nastaveni", "Soubor → Nastavení… (Ctrl+,)", 420
                               "mění úchytem vpravo dole, dvojklik na záhlaví okno zvětší nebo vrátí."),
      ("Jazyk / Language", "Čeština nebo angličtina (English). Výchozí je podle jazyka systému. Výstupy pro archiv "
                           "(Excel podle vzoru, protokol, názvy souborů) zůstávají česky.")],
-    sirky=(150, 516)) + "<p>Barvy a styl se změní hned, jazyk po restartu aplikace (SAKRA ho nabídne). "
-                        "Nastavení zůstane uložené.</p>")
+    sirky=(150, 516)) + "<p>Barvy a styl se změní hned, jazyk po restartu aplikace (SAKRA ho nabídne).</p>"
+    """<h2>Profily pracoviště</h2>
+<p>Uložené sestavy magnetofonu, převodníku, DI-boxu a autora digitalizace (na kartě kazety je uloží
+<b>Uložit jako profil…</b>, sem vede i tlačítko <b>Spravovat…</b>). Profil jde založit, přejmenovat, smazat
+a upravit jeho údaje. <b>Výchozí profil</b> (★) se předvyplní do každé nové kazety – v průvodci, na pracovním
+stole i v dávkách; doplní jen prázdné údaje, takže to, co přinese Excel, nepřepíše. Na kartě kazety je
+u něj „(výchozí)“. <b>Exportovat…</b> a <b>Importovat…</b> přenesou profily mezi pracovišti (soubor JSON;
+stejně pojmenovaný profil se přepíše).</p>
+""" + obr("nastaveni_profily", "Záložka Profily pracoviště", 480) + """
+<h2>Složky</h2>
+<p>Kde aplikace hledá nahrávky a projekty a kam ukládá archivní balíčky, nahrávky z magnetofonu, fotky z kamery,
+výstup dávek a uložené analýzy. Prázdné pole = výchozí. Je-li zapnuté <b>Pamatovat si naposledy použitou
+složku</b>, dialogy si složku po použití zapamatují (jako dosud); vypnuté – dialogy vždy začnou v nastavených
+složkách a nemění je.</p>
+""" + obr("nastaveni_slozky", "Záložka Složky", 480) + """
+<h2>Nastavení a data</h2>
+<p><b>Soubor s nastavením</b> ukazuje, kde je nastavení uložené. Výchozí je úložiště systému (Windows registr,
+macOS ~/Library/Preferences, Linux ~/.config/HerniArchiv/SAKRA.conf). <b>Uložit do souboru…</b> ho přesune
+do zvoleného souboru INI (sdílený nebo zálohovaný disk), <b>Zpět do systému</b> ho vrátí. <b>Přenosná instalace</b>:
+leží-li vedle programu (SAKRA.exe, u zdrojáků v kořeni projektu) soubor <b>sakra.ini</b>, nastavení je v něm –
+např. SAKRA na USB disku. Cestu jde určit i proměnnou prostředí <b>SAKRA_NASTAVENI</b>.
+<b>Exportovat nastavení…</b> uloží vzhled, jazyk, profily, složky a volby dialogů do souboru JSON (záloha,
+přenos na jiný počítač), <b>Importovat nastavení…</b> je načte (projeví se po restartu, SAKRA ho nabídne).
+<b>Uložené analýzy</b>: hotová analýza strany se ukládá, takže návrat ke kazetě (z dávky, otevření projektu)
+je okamžitý; tlačítko je smaže (uvádí počet a velikost).</p>
+""" + obr("nastaveni_data", "Záložka Nastavení a data", 480))
 
 kapitola("Klávesové zkratky", tab(
-    [("Ctrl+N", "Nová kazeta"), ("Ctrl+O", "Otevřít nahrávku"), ("Ctrl+Shift+O", "Otevřít projekt"),
+    [("Ctrl+N", "Nová kazeta"), ("Ctrl+O", "Otevřít nahrávku"), ("Ctrl+R", "Nahrát z magnetofonu"),
+     ("Ctrl+Shift+O", "Otevřít projekt"),
      ("Ctrl+S", "Uložit projekt"), ("Ctrl+E", "Archivní balíček"), ("Ctrl+,", "Nastavení"),
      ("mezerník", "Přehrát vybraný úsek (na časové ose)"), ("F1", "Tento návod"), ("Ctrl+Q", "Konec")],
     sirky=(150, 516)))

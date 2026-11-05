@@ -1,0 +1,18 @@
+﻿SAKRA – Windows 10/11, 64 bit (přenosná verze)
+==============================================
+a Swiss Army Knife for Retrogaming Archaeologists
+© 2025–2026 Jan Heřman (72ka) · vyrobeno pro potřeby Herního archivu (www.herniarchiv.cz)
+Chyby a náměty: 2hp@seznam.cz
+
+Spuštění
+  Rozbalte celou složku kamkoli a spusťte SAKRA.exe. Nic se neinstaluje, Python není potřeba.
+  (Pohodlnější je instalátor SAKRA-…-instalace.exe – nabídka Start, zástupce, otevírání projektů .sakra.)
+  Příkazová řádka: sakra-cli.exe (sakra-cli.exe --help).
+  Návod: v aplikaci Nápověda → Návod (F1), soubor _internal\sakra\dokumenty\SAKRA-navod.pdf
+
+  Windows SmartScreen může u staženého programu varovat – zvolte „Další informace → Přesto spustit“.
+
+Licence
+  Program: PolyForm Noncommercial 1.0.0 – zdarma pro nekomerční použití, autora je třeba uvádět.
+  Návod, logo a ikona: CC BY-NC 4.0. Komerční použití jen s písemným souhlasem autora: 2hp@seznam.cz
+  Texty licencí: _internal\LICENSE, _internal\NOTICE.txt, _internal\THIRD-PARTY-NOTICES.txt

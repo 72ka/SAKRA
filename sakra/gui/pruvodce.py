@@ -6,19 +6,21 @@ from pathlib import Path
 
 import shiboken6
 import soundfile as sf
-from PySide6.QtCore import QRectF, QSettings, QSize, Qt, QTimer, QUrl
+from PySide6.QtCore import QRectF, QSize, Qt, QTimer, QUrl
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QPainter, QPen
-from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
+from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QFrame, QGridLayout,
+                               QHBoxLayout,
                                QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QProgressBar, QPushButton,
                                QScrollArea, QSpinBox, QStackedWidget, QStyle, QStyledItemDelegate, QTableView,
                                QTableWidget, QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget)
 
 from .. import AKRONYM, AUTORSTVI, WEB, __version__
 from ..jadro.analyza import popis_stavu
-from ..jadro.model import ZADNA_DATA, Zaznam, cas_text, urci_platformu
+from ..jadro.model import DRUHY_ZVUKU, VOLBY_ZVUKU, ZADNA_DATA, Zaznam, cas_text, urci_platformu
 from ..jadro.texty import pocet
 from ..platformy import RUCNI, podle_id
 from ..projekt import cislo_strany, inventarni_cislo
+from .. import nastaveni
 from ..i18n import tr, tr_data
 from . import ikony, vzhled
 from .karta import KartaKazety, posuvne
@@ -176,7 +178,7 @@ class Pruvodce(QWidget):
     def __init__(self, okno, parent=None):
         super().__init__(parent)
         self.okno = okno
-        self.nastaveni = QSettings("HerniArchiv", "SAKRA")
+        self.nastaveni = nastaveni.nastaveni()
         self.setAcceptDrops(True)
         self.soubory: list[Path] = []
         self._analyzovano: tuple | None = None
@@ -211,6 +213,7 @@ class Pruvodce(QWidget):
         self.ukazatel.setMaximumWidth(260)
         self.ukazatel.setMaximumHeight(8)
         self.ukazatel.setTextVisible(False)
+        self.ukazatel.setProperty("bez_textu", True)
         self.zpet = QPushButton(tr("← Zpět"))
         self.zpet.clicked.connect(lambda: self.jdi(self.krok - 1))
         self.dale = QPushButton()
@@ -363,8 +366,12 @@ class Pruvodce(QWidget):
         vyber = QPushButton(tr("  Vybrat nahrávky…  "))
         vyber.setMinimumHeight(44)
         vyber.clicked.connect(self._vyber_soubory)
+        nahrat = QPushButton(tr("  Nahrát z magnetofonu…  "))
+        nahrat.setMinimumHeight(44)
+        nahrat.clicked.connect(self._nahraj)
         r = QHBoxLayout()
         r.addWidget(vyber)
+        r.addWidget(nahrat)
         r.addWidget(QLabel(tr("  …nebo soubory přetáhněte do okna.")))
         r.addStretch(1)
         lay.addLayout(r)
@@ -415,6 +422,13 @@ class Pruvodce(QWidget):
         if cesty:
             self.okno._pamatuj(cesty[0])
             self.pridej_soubory([Path(c) for c in cesty])
+
+    def _nahraj(self):
+        from .nahravani import DialogNahravani
+        d = DialogNahravani(self.okno.kazeta.inventar.cislo, self.okno._slozka(), self)
+        if d.exec() == QDialog.DialogCode.Accepted and d.hotove:
+            self.okno._pamatuj(str(d.hotove[0]))
+            self.pridej_soubory(d.hotove)
 
     def dragEnterEvent(self, e):
         if e.mimeData().hasUrls():
@@ -480,6 +494,7 @@ class Pruvodce(QWidget):
             )
         )
         self.karta = KartaKazety()
+        self.karta.spravovat_profily.connect(lambda: self.okno.nastaveni_vzhledu("profily"))
         self.karta.cislo.textEdited.connect(self._nastav_inv)
         lay.addWidget(self.karta, 1)
         return w
@@ -591,6 +606,7 @@ class Pruvodce(QWidget):
             pruh.setRange(0, len(zz))
             pruh.setValue(len(ok) - len(bez_souctu))
             pruh.setTextVisible(False)
+            pruh.setProperty("bez_textu", True)
             pruh.setMaximumHeight(8)
             barva = "#EF5B5B" if spatne and not ok else "#F2C14E" if spatne or bez_souctu else "#46C27D"
             pruh.setStyleSheet(f"QProgressBar{{background:{vzhled.barvy()['okraj']};border:none;border-radius:4px}}"
@@ -644,9 +660,10 @@ class Pruvodce(QWidget):
             lab.setWordWrap(True)
             g.addWidget(lab, 1, 1)
             cb = QComboBox()
-            for hodnota in ["(neznámá)", ZADNA_DATA] + RUCNI:     # zobrazí se přeloženě, uloží česky
+            for hodnota in ["(neznámá)", ZADNA_DATA, *VOLBY_ZVUKU] + RUCNI:     # zobrazí se přeloženě, uloží česky
                 cb.addItem(ikony.ikona(hodnota), tr(hodnota), hodnota)
-            vybrano = ZADNA_DATA if z.typ == "Audio" else z.platforma if z.platforma not in ("", "?") else "(neznámá)"
+            druh = next((v for d, v in zip(DRUHY_ZVUKU, VOLBY_ZVUKU) if z.nazev == f"({d})"), ZADNA_DATA)
+            vybrano = druh if z.typ == "Audio" else z.platforma if z.platforma not in ("", "?") else "(neznámá)"
             cb.setCurrentIndex(max(0, cb.findData(vybrano)))
             cb.setToolTip(tr("Platforma úseku, pokud ji znáte – nebo „žádná data“, když na pásce není program"))
             cb.currentIndexChanged.connect(lambda i, z=z, cb=cb: self._rucni_platforma(z, cb.itemData(i)))
@@ -824,7 +841,7 @@ class Pruvodce(QWidget):
 
     def _uloz(self):
         kam = Path(self.kam.text())
-        self.nastaveni.setValue("archiv", str(kam))
+        nastaveni.zapamatuj_slozku("archiv", kam)
         self._varovani = False
         self.vysledek.setText(tr("Ukládám…"))
 

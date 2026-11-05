@@ -1,21 +1,29 @@
-"""Časová osa strany: vlna nahrávky, barevné úseky podle platformy, bloky, výběr. Kolečko = zoom, tažení = posun."""
+"""Časová osa strany: vlna nahrávky, barevné úseky podle platformy, bloky, výběr, slabá místa signálu.
+Kolečko = zoom, tažení = posun, Shift + tažení = výběr úseku, pravé tlačítko = označit výběr jako šum,
+hudbu nebo řeč (ruční úseky analýza vynechá)."""
 from __future__ import annotations
 
 import math
 
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
-from PySide6.QtWidgets import QWidget
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPolygonF
+from PySide6.QtWidgets import QMenu, QToolTip, QWidget
 
 from ..jadro.analyza import VysledekStrany
-from ..jadro.model import cas_text
+from ..jadro import audio
+from ..jadro.model import DRUHY_ZVUKU, cas_text
+from ..jadro.slabe import slaba_mista_strany
 from ..platformy import podle_id
 from ..i18n import tr
 
 KROKY = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600]
 BARVA_NEZNAME = QColor("#8A93A3")
 BARVA_AUDIO = QColor("#A8B8D8")
+BARVA_SLABE = QColor("#F08A24")       # slabé čtení (pokles úrovně)
+BARVA_VYPADEK = QColor("#E03A3A")     # výpadek
+PRUH_SLABYCH = (42, 46)               # y pruhu slabých míst nad vlnou
+BARVY_RUCNI = {"šum": QColor("#9AA0A8"), "hudba": QColor("#9B6BC9"), "řeč": QColor("#3A9E9A")}
 
 
 class CasovaOsa(QWidget):
@@ -23,6 +31,7 @@ class CasovaOsa(QWidget):
     uprava = Signal(float, bool)  # ruční úprava: čas kliknutí, True = pravé tlačítko (odebrat přechod)
     rozsah = Signal(float, float)  # změna zobrazeného úseku (od, do)
     mys = Signal(float)           # čas pod myší, NaN = myš odešla (None přes signál PySide na Pythonu 3.11 padá)
+    oznaceni = Signal(float, float, str)  # ruční úsek od, do, druh (šum/hudba/řeč); "" = zrušit označení
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -38,11 +47,16 @@ class CasovaOsa(QWidget):
         self.prehravani: float | None = None     # kurzor přehrávání (s)
         self.rezim_upravy = False                # klik přidává / odebírá přechody
         self.pridane: set[int] = set()           # ručně přidané přechody (vzorky) – kreslí se zeleně
+        self.slaba = []                          # slabá místa signálu (SlabeMisto)
+        self.zobrazeni = "vstup"                 # stereo: vstup / levy / pravy / soucet / obe
+        self.posun_nahled: float | None = None   # ladění posunu součtu (µs) před novou analýzou
+        self._vyber_od: float | None = None      # Shift + tažení: začátek výběru
 
     # ---- data a pohled ----
     def nastav(self, v: VysledekStrany | None) -> None:
         self.v = v
         self.vyber = None
+        self.slaba = slaba_mista_strany(v) if v else []
         self.cele()
 
     @property
@@ -94,7 +108,8 @@ class CasovaOsa(QWidget):
         self._pravitko(p, w)
         self._oblasti(p, w)
         horni, dolni = 46, h - 6
-        self._vlna(p, w, horni, dolni)
+        self._vlny(p, w, horni, dolni)
+        self._slaba(p, horni, dolni)
         self._bloky(p, horni, dolni)
         if self.vyber:
             a, b = self._x(self.vyber[0]), self._x(self.vyber[1])
@@ -126,7 +141,12 @@ class CasovaOsa(QWidget):
         while t <= self.do:
             x = self._x(t)
             p.drawLine(QPointF(x, 14), QPointF(x, 20))
-            text = cas_text(t) if krok < 1 else cas_text(t)[:5]
+            if krok >= 1:
+                text = cas_text(t)[:5]
+            elif krok >= 0.01:
+                text = cas_text(t)
+            else:                                 # milisekundy (jako cas_text, o řád přesněji)
+                text = f"{int(t // 60):02d}:{t % 60:06.3f}"
             p.drawText(QPointF(x + 3, 12), text)
             t += krok
 
@@ -135,21 +155,72 @@ class CasovaOsa(QWidget):
             if o.konec < self.od or o.zacatek > self.do:
                 continue
             pl = podle_id(o.platforma) if o.platforma else None
-            barva = QColor(pl.barva) if pl else (BARVA_AUDIO if o.nazev == "audio" else BARVA_NEZNAME)
+            barva = self._barva_oblasti(o, pl)
             a, b = self._x(o.zacatek), self._x(o.konec)
             r = QRectF(a, 23, max(2.0, b - a), 18)
             p.fillRect(r, barva)
+            if o.rucni:                       # ručně označený úsek: šrafování
+                p.fillRect(r, QBrush(QColor(255, 255, 255, 90), Qt.BrushStyle.BDiagPattern))
             if b - a > 30:
-                p.setPen(QColor("#ffffff") if pl else QColor("#1F2430"))
-                text = o.nazev if pl else (tr("zvuk") if o.nazev == "audio" else tr("nerozpoznáno"))
+                p.setPen(QColor("#ffffff") if pl or o.rucni else QColor("#1F2430"))
+                text = o.nazev if pl else ("✎ " + tr(o.nazev) if o.rucni else
+                                           tr("zvuk") if o.nazev == "audio" else tr("nerozpoznáno"))
                 p.drawText(r.adjusted(4, 0, -2, 0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                            p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, int(b - a - 6)))
 
-    def _vlna(self, p: QPainter, w: int, horni: int, dolni: int) -> None:
-        x = self.v.nahravka.vzorky
+    @staticmethod
+    def _barva_oblasti(o, pl) -> QColor:
+        if o.rucni:
+            return BARVY_RUCNI.get(o.nazev, BARVA_AUDIO)
+        return QColor(pl.barva) if pl else (BARVA_AUDIO if o.nazev == "audio" else BARVA_NEZNAME)
+
+    def rucni_oblast_v(self, t: float):
+        """Ručně označený úsek v čase t, jinak None."""
+        return next((o for o in (self.v.oblasti if self.v else []) if o.rucni and o.zacatek <= t <= o.konec), None)
+
+    def _vlny(self, p: QPainter, w: int, horni: int, dolni: int) -> None:
+        """Průběh podle volby zobrazení: vstup analýzy, levá / pravá stopa, jejich součet, obě pod sebou."""
+        n = self.v.nahravka
+        rezim = self.zobrazeni if n.stopy is not None and not self.rezim_upravy else "vstup"
+        if rezim == "vstup":
+            self._vlna(p, w, horni, dolni)
+        elif rezim in ("levy", "pravy"):
+            self._vlna(p, w, horni, dolni, n.stopy[:, 0 if rezim == "levy" else 1], hrany=False)
+            self._stitek(p, horni, tr("L") if rezim == "levy" else tr("P"))
+        elif rezim == "soucet":
+            a = max(0, int(self.od * n.rate) - 64)
+            b = min(len(n.stopy), int(self.do * n.rate) + 64)
+            if b > a:
+                kus = audio.soucet(n.stopy[a:b, 0], n.stopy[a:b, 1], self.posun_souctu() * 1e-6 * n.rate)
+                self._vlna(p, w, horni, dolni, kus, x0=a, hrany=False)
+            self._stitek(p, horni, tr("L+P"))
+        else:                                                      # obě stopy pod sebou
+            stred = (horni + dolni) // 2
+            self._vlna(p, w, horni, stred - 2, n.stopy[:, 0], hrany=False)
+            self._vlna(p, w, stred + 2, dolni, n.stopy[:, 1], hrany=False)
+            self._stitek(p, horni, tr("L"))
+            self._stitek(p, stred + 2, tr("P"))
+
+    def posun_souctu(self) -> float:
+        """Posun P proti L (µs) pro zobrazení součtu: použitý při analýze, jinak změřený."""
+        if self.posun_nahled is not None:
+            return self.posun_nahled
+        sig = self.v.strana.signal or {}
+        if self.v.nahravka.kanal == audio.SOUCET:
+            return float(sig.get("posun_souctu_us") or 0.0)
+        return float(self.v.nahravka.posun_us or 0.0)
+
+    def _stitek(self, p: QPainter, y: int, text: str) -> None:
+        p.setPen(self.palette().text().color())
+        p.drawText(QPointF(4, y + 12), text)
+
+    def _vlna(self, p: QPainter, w: int, horni: int, dolni: int, x=None, x0: int = 0, hrany: bool = True) -> None:
+        """Vlna `x` (vzorky od indexu x0; výchozí: vstup analýzy) v pásu horni..dolni."""
+        if x is None:
+            x = self.v.nahravka.vzorky
         rate = self.v.nahravka.rate
-        a = max(0, int(self.od * rate))
-        b = min(len(x), int(self.do * rate) + 1)
+        a = max(x0, int(self.od * rate))
+        b = min(x0 + len(x), int(self.do * rate) + 1)
         stred = (horni + dolni) / 2
         vyska = (dolni - horni) / 2
         p.setPen(QPen(self.palette().mid().color(), 1))
@@ -158,7 +229,7 @@ class CasovaOsa(QWidget):
             return
         barva = QColor("#3B6FB6")
         p.setPen(QPen(barva, 1))
-        kus = x[a:b]
+        kus = x[a - x0:b - x0]
         k = 1.0 / 32768 * vyska
         if b - a > 2 * w:                         # obálka: min/max na sloupec, barva podle platformy úseku
             sloupcu = w
@@ -183,7 +254,30 @@ class CasovaOsa(QWidget):
                 for pt in poly:
                     p.drawEllipse(pt, 1.5, 1.5)
             p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-            self._hrany(p, horni, dolni)
+            if hrany:
+                self._hrany(p, horni, dolni)
+
+    def _slaba(self, p: QPainter, horni: int, dolni: int) -> None:
+        """Slabá místa: čárka nad vlnou (oranžová = slabé čtení, červená = výpadek), výpadek i podbarvený."""
+        y0, y1 = PRUH_SLABYCH
+        for m in self._slaba_v_pohledu():
+            a, b = self._x(m.zacatek), self._x(m.konec)
+            sirka = max(2.0, b - a)
+            barva = BARVA_VYPADEK if m.vypadek else BARVA_SLABE
+            p.fillRect(QRectF(a, y0, sirka, y1 - y0), barva)
+            if m.vypadek:
+                podklad = QColor(barva)
+                podklad.setAlpha(28)
+                p.fillRect(QRectF(a, horni, sirka, dolni - horni), podklad)
+
+    def _slaba_v_pohledu(self):
+        return [m for m in self.slaba if m.konec >= self.od and m.zacatek <= self.do]
+
+    def slabe_misto_v(self, x: float):
+        """Slabé místo pod souřadnicí x (s tolerancí 3 px), jinak None."""
+        tol = 3 * (self.do - self.od) / max(1, self.width())
+        t = self._t(x)
+        return next((m for m in self._slaba_v_pohledu() if m.zacatek - tol <= t <= m.konec + tol), None)
 
     def _barvy_sloupcu(self, t0: float, krok: float, n: int) -> list[QColor]:
         """Barva vlny v každém sloupci: platforma úseku, šedá mimo data (jako v návrhu)."""
@@ -191,7 +285,7 @@ class CasovaOsa(QWidget):
         out = [mimo] * n
         for o in self.v.oblasti:
             pl = podle_id(o.platforma) if o.platforma else None
-            barva = QColor(pl.barva) if pl else (BARVA_AUDIO if o.nazev == "audio" else BARVA_NEZNAME)
+            barva = self._barva_oblasti(o, pl)
             a = max(0, int((o.zacatek - t0) / krok))
             b = min(n, int((o.konec - t0) / krok) + 1)
             for i in range(a, b):
@@ -245,26 +339,77 @@ class CasovaOsa(QWidget):
         self._nastav_rozsah(od, do)
 
     def mousePressEvent(self, e):
-        if e.button() == Qt.MouseButton.LeftButton:
+        if (e.button() == Qt.MouseButton.LeftButton and self.v and not self.rezim_upravy
+                and e.modifiers() & Qt.KeyboardModifier.ShiftModifier):
+            self._vyber_od = self._t(e.position().x())          # Shift + tažení: výběr úseku
+            self.vyber = None
+        elif e.button() == Qt.MouseButton.LeftButton:
             self._tah = (e.position().x(), self.od, self.do)
             self._posunuto = False
         elif e.button() == Qt.MouseButton.RightButton and self.rezim_upravy and self.v:
             self.uprava.emit(self._t(e.position().x()), True)
+        elif e.button() == Qt.MouseButton.RightButton and self.v:
+            self._nabidka(e)
+
+    def _nabidka(self, e) -> None:
+        """Pravé tlačítko: označit výběr jako šum / hudbu / řeč, zrušit ruční označení pod myší."""
+        self.sestav_nabidku(self._t(e.position().x())).exec(e.globalPosition().toPoint())
+
+    def sestav_nabidku(self, t: float) -> QMenu:
+        m = QMenu(self)
+        if self.vyber and self.vyber[1] - self.vyber[0] > 0.01:
+            od, do = self.vyber
+            m.addSection(tr("Výběr {0} – {1}").format(cas_text(od), cas_text(do)))
+            for druh in DRUHY_ZVUKU:
+                m.addAction(tr("Označit jako: {0}").format(tr(druh)),
+                            lambda d=druh, od=od, do=do: self.oznaceni.emit(od, do, d))
+        else:
+            a = m.addAction(tr("Úsek vyberte Shift + tažením (nebo klikněte na program)"))
+            a.setEnabled(False)
+        o = self.rucni_oblast_v(t)
+        if o is not None:
+            m.addSeparator()
+            m.addAction(tr("Zrušit označení „{0}“").format(tr(o.nazev)),
+                        lambda o=o: self.oznaceni.emit(o.zacatek, o.konec, ""))
+        return m
 
     def mouseMoveEvent(self, e):
         if self.v:
             self._mys = self._t(e.position().x())
             self.mys.emit(self._mys)
-        if self._tah:
+        if self._vyber_od is not None:
+            t = self._t(e.position().x())
+            self.vyber = (min(self._vyber_od, t), max(self._vyber_od, t))
+        elif self._tah:
             x0, od, do = self._tah
             dx = e.position().x() - x0
             if abs(dx) > 3:
                 self._posunuto = True
             posun = -dx / max(1, self.width()) * (do - od)
             self._nastav_rozsah(od + posun, do + posun)
+        elif self.v:
+            self._bublina_slabeho(e)
         self.update()
 
+    def _bublina_slabeho(self, e) -> None:
+        """Nad pruhem slabých míst (a pár bodů kolem) ukáže, jak moc signál klesl."""
+        y0, y1 = PRUH_SLABYCH
+        m = self.slabe_misto_v(e.position().x()) if y0 - 4 <= e.position().y() <= y1 + 4 else None
+        if m is None:
+            QToolTip.hideText()
+            return
+        druh = tr("Výpadek signálu") if m.vypadek else tr("Slabé čtení")
+        text = tr("{0}: úroveň {1} % okolí, {2} ms").format(druh, round(m.uroven * 100),
+                                                           max(1, round((m.konec - m.zacatek) * 1000)))
+        QToolTip.showText(e.globalPosition().toPoint(), text, self)
+
     def mouseReleaseEvent(self, e):
+        if self._vyber_od is not None:
+            self._vyber_od = None
+            if self.vyber and self.vyber[1] - self.vyber[0] < 0.005:
+                self.vyber = None
+            self.update()
+            return
         if self._tah and not self._posunuto and self.v:
             if self.rezim_upravy:
                 self.uprava.emit(self._t(e.position().x()), False)

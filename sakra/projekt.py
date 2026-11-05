@@ -28,17 +28,20 @@ def inventarni_cislo(cesta: str | Path) -> str:
 
 
 def analyzuj_strany(nahravky: dict[int, Path], prubeh=None,
-                    volby: dict[int, tuple[str, str]] | None = None, platforma: str = "") -> dict[int, VysledekStrany]:
-    """Jen analýza (nesahá na kazetu – jde pustit ve vlákně). `volby`: strana -> (kanál, polarita);
-    `platforma`: počítač kazety (jen jeho dekodéry), prázdná = automaticky."""
+                    volby: dict[int, tuple[str, str]] | None = None, platforma: str = "",
+                    rucni: dict[int, list] | None = None) -> dict[int, VysledekStrany]:
+    """Jen analýza (nesahá na kazetu – jde pustit ve vlákně). `volby`: strana -> (kanál, polarita[, posun µs]);
+    `platforma`: počítač kazety (jen jeho dekodéry), prázdná = automaticky; `rucni`: strana -> ručně
+    označené úseky (šum, hudba, řeč), které analýza vynechá."""
     pr = prubeh or (lambda x, t="": None)
     vysledky: dict[int, VysledekStrany] = {}
     pocet = max(1, len(nahravky))
     for i, (cislo, cesta) in enumerate(sorted(nahravky.items())):
-        kanal, polarita = (volby or {}).get(cislo, ("auto", "auto"))
+        kanal, polarita, *posun = (volby or {}).get(cislo, ("auto", "auto"))
         vysledky[cislo] = analyzuj_stranu(
             cesta, cislo, prubeh=lambda x, t="", i=i, c=cislo: pr((i + x) / pocet, f"Strana {c}: {t}"),
-            volba_kanalu=kanal, polarita=polarita, platforma=platforma)
+            volba_kanalu=kanal, polarita=polarita, platforma=platforma, rucni_useky=(rucni or {}).get(cislo),
+            posun_us=posun[0] if posun else None)
     return vysledky
 
 
@@ -55,7 +58,8 @@ def vloz_vysledky(kazeta: Kazeta, nove: dict[int, VysledekStrany],
 
 def zpracuj(kazeta: Kazeta, nahravky: dict[int, Path], prubeh=None) -> dict[int, VysledekStrany]:
     """Analyzuje strany, opraví soubory z kopií a vloží výsledky do kazety."""
-    vysledky = analyzuj_strany(nahravky, prubeh, platforma=kazeta.platforma)
+    vysledky = analyzuj_strany(nahravky, prubeh, platforma=kazeta.platforma,
+                               rucni={s.cislo: s.rucni_useky for s in kazeta.strany})
     vloz_vysledky(kazeta, vysledky)
     return vysledky
 

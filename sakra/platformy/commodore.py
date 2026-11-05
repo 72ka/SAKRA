@@ -85,6 +85,7 @@ def bloky_c64(per: np.ndarray, zac: np.ndarray, rate: int) -> list[Blok]:
         blok = Blok(t0, t1, typ, kopie, payload, ok,
                     chybne_bajty=[] if ok else ([c - 9 for c in chyby if 9 <= c < len(bajty) - 1] or
                                                 list(range(len(payload)))))
+        blok.soucet_pasky = bajty[-1]
         blok.info_rychlost = S_US / s  # type: ignore[attr-defined]
         out.append(blok)
     return out

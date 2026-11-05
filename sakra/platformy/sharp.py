@@ -50,13 +50,13 @@ def _blok(v, zac, k: int, n: int, typ: str, rate: int) -> Blok:
         if not chyby and _soucet(data) == sc:
             poznamka = "převzato z kopie bloku na pásce" if pokus else ""
             b = Blok(float(zac[k]) / rate, float(zac[min(konec, len(zac) - 1)]) / rate, typ, None, data, True,
-                     oprava=poznamka)
+                     oprava=poznamka, soucet_pasky=sc)
             return b
         if pokus == 0:
-            prvni = (data, chyby, konec)
-    data, chyby, konec = prvni
+            prvni = (data, chyby, konec, sc)
+    data, chyby, konec, sc = prvni
     return Blok(float(zac[k]) / rate, float(zac[min(konec, len(zac) - 1)]) / rate, typ, None, data, False,
-                chybne_bajty=[c for c in chyby if c < n] or list(range(n)))
+                chybne_bajty=[c for c in chyby if c < n] or list(range(n)), soucet_pasky=sc)
 
 
 def bloky_mz(per: np.ndarray, zac: np.ndarray, rate: int, stav: dict) -> list[Blok]:

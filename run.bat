@@ -3,7 +3,7 @@ rem SAKRA - spusteni ve Windows
 cd /d "%~dp0"
 where uv >nul 2>nul
 if %errorlevel%==0 (
-  uv run sakra %*
+  uv run --extra kamera sakra %*
 ) else (
   python -m sakra %*
 )

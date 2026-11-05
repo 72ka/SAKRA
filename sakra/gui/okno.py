@@ -9,24 +9,26 @@ import traceback
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import QProcess, QSettings, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtCore import QProcess, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QActionGroup, QColor, QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDockWidget,
-                               QApplication, QFileDialog, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
-                               QMenuBar, QMessageBox,
+                               QApplication, QDoubleSpinBox, QFileDialog, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
+                               QMenu, QMenuBar, QMessageBox,
                                QPlainTextEdit, QProgressBar, QPushButton, QSplitter, QStackedWidget, QTableView,
                                QTabWidget, QToolBar, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from .. import NAVOD, __version__
 from ..balicek import bezpecne_jmeno, exportuj as exportuj_balicek
-from ..jadro.analyza import VysledekStrany, obnov_navrhy, prenes_rucni, znovu_dekoduj_blok
-from ..jadro.model import Kazeta, Zaznam, cas_text
+from ..jadro.analyza import (VysledekStrany, obnov_navrhy, oznac_usek_vysledku, prenes_rucni,
+                              uplatni_rucni_useky, znovu_dekoduj_blok)
+from ..jadro.model import DRUHY_ZVUKU, Kazeta, Zaznam, cas_text
 from ..jadro.pulzy import odeber_hranu, vloz_hranu
 from ..jadro.texty import pocet
 from ..metadata import excel
 from ..platformy import podle_id
 from ..projekt import PRIPONA, analyzuj_strany, cislo_strany, otevri, uloz, vloz_vysledky
 from .. import i18n
+from .. import nastaveni
 from ..i18n import tr, tr_data
 from . import ikony, vzhled
 from .casova_osa import CasovaOsa
@@ -88,7 +90,7 @@ class HlavniOkno(QMainWindow):
         self.vysledky: dict[int, VysledekStrany] = {}
         self.cesta_projektu: Path | None = None
         self.ukol: Ukol | None = None
-        self.nastaveni = QSettings("HerniArchiv", "SAKRA")
+        self.nastaveni = nastaveni.nastaveni()
         # výchozí velikost podle obrazovky (ne víc, než se vejde), pak naposledy použitá
         plocha = self.screen().availableGeometry() if self.screen() else None
         if plocha is not None:
@@ -100,6 +102,7 @@ class HlavniOkno(QMainWindow):
         self.osa = CasovaOsa()
         self.osa.klik.connect(self._klik_na_ose)
         self.osa.uprava.connect(self._uprava_signalu)
+        self.osa.oznaceni.connect(self._oznac_usek)
         self.uprava: dict | None = None
         self._vybrany: tuple | None = None       # (záznam, blok) – co je vybrané v tabulce, stromu nebo na ose
         self.strana = QComboBox()
@@ -111,9 +114,31 @@ class HlavniOkno(QMainWindow):
         nad_osou.addWidget(self.strana)
         # kanál a polarita nahrávky (změna = nová analýza strany)
         self.volba_kanalu = QComboBox()
-        for text, k in ((tr("Auto"), "auto"), (tr("Levý"), "levy"), (tr("Pravý"), "pravy")):
+        for text, k in ((tr("Auto"), "auto"), (tr("Levý"), "levy"), (tr("Pravý"), "pravy"),
+                        (tr("L+P (součet)"), "soucet")):
             self.volba_kanalu.addItem(text, k)
-        self.volba_kanalu.setToolTip(tr("Kanál stereo nahrávky: Auto = ten se silnějším signálem"))
+        self.volba_kanalu.setToolTip(tr("Kanál stereo nahrávky: Auto = ten se silnějším signálem; L+P = součet "
+                                        "obou stop srovnaných o posun (sešikmená hlava, lepší odstup od šumu)"))
+        # posun P proti L pro součet (µs); prázdné = změřený automaticky
+        self.posun_kanalu = QDoubleSpinBox()
+        self.posun_kanalu.setRange(-1001, 1000)
+        self.posun_kanalu.setSingleStep(5)
+        self.posun_kanalu.setDecimals(0)
+        self.posun_kanalu.setSuffix(" µs")
+        self.posun_kanalu.setSpecialValueText(tr("auto"))
+        self.posun_kanalu.setKeyboardTracking(False)
+        self.posun_kanalu.setToolTip(tr("Posun pravé stopy proti levé pro součet L+P (kladný: pravá se zpožďuje). "
+                                        "„auto“ = změřit z nahrávky. Náhled ukazuje zobrazení „L+P“, "
+                                        "analýza proběhne po potvrzení (Enter)."))
+        self.posun_kanalu.valueChanged.connect(self._nahled_posunu)
+        self.posun_kanalu.editingFinished.connect(self._zmena_volby)
+        # co se kreslí na časové ose u sterea (analýzu nemění)
+        self.volba_zobrazeni = QComboBox()
+        for text, k in ((tr("Vstup analýzy"), "vstup"), (tr("Levá stopa"), "levy"), (tr("Pravá stopa"), "pravy"),
+                        (tr("Součet L+P"), "soucet"), (tr("Obě stopy"), "obe")):
+            self.volba_zobrazeni.addItem(text, k)
+        self.volba_zobrazeni.setToolTip(tr("Co ukázat na časové ose stereo nahrávky – analýzu to nemění"))
+        self.volba_zobrazeni.currentIndexChanged.connect(self._zmena_zobrazeni)
         self.volba_polarity = QComboBox()
         for text, k in ((tr("Auto"), "auto"), (tr("Normální"), "normalni"), (tr("Obrácená"), "obracena")):
             self.volba_polarity.addItem(text, k)
@@ -129,6 +154,8 @@ class HlavniOkno(QMainWindow):
             cb.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self.volba_platformy.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.volba_platformy.setMinimumContentsLength(12)
+        nad_osou.addWidget(QLabel(tr("  Zobrazit: ")))
+        nad_osou.addWidget(self.volba_zobrazeni)
         nad_osou.addAction(tr("Celá strana"), self.osa.cele)
         akce_prehrat = nad_osou.addAction(tr("▶ Přehrát"), self.prehraj_vyber)
         akce_prehrat.setToolTip(tr("Přehrát vybraný úsek (mezerník)"))
@@ -220,6 +247,7 @@ class HlavniOkno(QMainWindow):
 
         self.karta = KartaKazety()
         self.karta.zmeneno.connect(self._zmena_karty)
+        self.karta.spravovat_profily.connect(lambda: self.nastaveni_vzhledu("profily"))
         self.detail = Detail()
         self.detail.ulozit.connect(self._uloz_program)
         self.detail.emulovat.connect(self.emuluj)
@@ -255,6 +283,9 @@ class HlavniOkno(QMainWindow):
         self.strom.setHeaderLabels([tr("Obsah"), tr("Stav")])
         self.strom.setColumnWidth(0, 210)
         self.strom.itemClicked.connect(self._klik_ve_stromu)
+        self.strom.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.strom.customContextMenuRequested.connect(
+            lambda pos: self.nabidka_stromu(self.strom.itemAt(pos)).exec(self.strom.viewport().mapToGlobal(pos)))
         self.nadpis_obsahu = nadpis_sekce(tr("OBSAH KAZETY"))
         self.platformy = QLabel()
         self.platformy.setTextFormat(Qt.TextFormat.RichText)
@@ -301,7 +332,7 @@ class HlavniOkno(QMainWindow):
         self.prubeh.setRange(0, 1000)
         self.prubeh.hide()
         self.statusBar().addPermanentWidget(self.prubeh)
-        self._nastav_kazetu(Kazeta())
+        self._nastav_kazetu(self._nova_kazeta())
         self.prepni_rezim(self.nastaveni.value("rezim", "stul"))
         geometrie = self.nastaveni.value("okno/geometrie")
         if geometrie:
@@ -345,6 +376,7 @@ class HlavniOkno(QMainWindow):
 
         akce(tr("Nová kazeta"), self.nova, m_soubor, QKeySequence.StandardKey.New)
         akce(tr("Otevřít nahrávku…"), self.otevri_nahravky, m_soubor, "Ctrl+O")
+        akce(tr("Nahrát z magnetofonu…"), self.nahraj_z_magnetofonu, m_soubor, "Ctrl+R", do_listy=False)
         akce(tr("Otevřít projekt…"), self.otevri_projekt, m_soubor, "Ctrl+Shift+O")
         akce(tr("Uložit projekt"), self.uloz_projekt, m_soubor, QKeySequence.StandardKey.Save)
         m_soubor.addSeparator()
@@ -361,6 +393,7 @@ class HlavniOkno(QMainWindow):
         lista.addSeparator()                     # jak se čte zobrazená strana (jako v návrhu: v hlavní liště)
         lista.addWidget(QLabel(tr(" Kanál: ")))
         lista.addWidget(self.volba_kanalu)
+        self.akce_posunu = lista.addWidget(self.posun_kanalu)
         lista.addWidget(QLabel(tr("  Polarita: ")))
         lista.addWidget(self.volba_polarity)
         for klic, text in REZIMY:
@@ -439,10 +472,10 @@ class HlavniOkno(QMainWindow):
             if v is None:
                 continue
             for z in s.zaznamy:
-                if not z.nerozpoznano or z.cas_od is None:
+                if not z.nerozpoznano or z.rucni_usek or z.cas_od is None:
                     continue
                 for o in v.oblasti:
-                    if o.platforma is None and abs(o.zacatek - z.cas_od) < 0.05:
+                    if o.platforma is None and not o.rucni and abs(o.zacatek - z.cas_od) < 0.05:
                         nazev = "audio" if z.typ == "Audio" else ""
                         if o.nazev != nazev:
                             o.nazev = nazev
@@ -491,7 +524,7 @@ class HlavniOkno(QMainWindow):
         v = self.vysledky.get(cislo)
         for cb, hodnota, auto in (
                 (self.volba_kanalu, s.volba_kanalu if s else "auto",
-                 (tr("levý"), tr("pravý"))[min(1, s.kanal)] if s else ""),
+                 ((tr("levý"), tr("pravý"))[min(1, s.kanal)] if s.kanal >= 0 else tr("L+P")) if s else ""),
                 (self.volba_polarity, s.polarita if s else "auto",
                  tr("obrácená") if s and s.signal.get("polarita_obracena") else tr("normální"))):
             cb.blockSignals(True)
@@ -502,8 +535,24 @@ class HlavniOkno(QMainWindow):
             i = cb.findData(hodnota)
             cb.setCurrentIndex(i if i >= 0 else 0)
             cb.blockSignals(False)
-        self.volba_kanalu.setEnabled(bool(v and v.nahravka.kanaly > 1))
+        stereo = bool(v and v.nahravka.kanaly > 1)
+        self.volba_kanalu.setEnabled(stereo)
         self.volba_polarity.setEnabled(v is not None)
+        self.akce_posunu.setVisible(bool(s and s.volba_kanalu == "soucet" and stereo))
+        self.posun_kanalu.blockSignals(True)
+        self.posun_kanalu.setValue(s.posun_kanalu if s and s.posun_kanalu is not None
+                                   else self.posun_kanalu.minimum())
+        self.posun_kanalu.blockSignals(False)
+        self.volba_zobrazeni.setEnabled(bool(stereo and v.nahravka.stopy is not None))
+        if v is not None and stereo:
+            sig = v.strana.signal or {}
+            p, k = sig.get("posun_kanalu_us"), sig.get("korelace_kanalu")
+            self.volba_zobrazeni.setToolTip(
+                tr("Co ukázat na časové ose stereo nahrávky – analýzu to nemění") + "\n"
+                + (tr("Změřený posun P proti L: {0:+.0f} µs, shoda stop {1:.0%}").format(p, k or 0)
+                   if p is not None else tr("Posun stop nejde změřit (stopy spolu nesouhlasí – jiný obsah, "
+                                            "jedna prázdná?)")))
+        self.osa.posun_nahled = None
         if v is not None and v.nahravka.kanaly == 1:
             self.volba_kanalu.setItemText(0, tr("Mono"))
 
@@ -514,7 +563,10 @@ class HlavniOkno(QMainWindow):
             self._obnov_volby()
             return
         kanal, polarita = self.volba_kanalu.currentData(), self.volba_polarity.currentData()
-        if (kanal, polarita) == (s.volba_kanalu, s.polarita):
+        posun = (None if kanal != "soucet" or self.posun_kanalu.value() <= self.posun_kanalu.minimum()
+                 else self.posun_kanalu.value())
+        if (kanal, polarita, posun) == (s.volba_kanalu, s.polarita, s.posun_kanalu if kanal == "soucet" else None):
+            self._obnov_volby()
             return
         rucni = [z.nazev for z in s.zaznamy if z.soubor and any(b.oprava.startswith("ruční úprava")
                                                                   for b in z.soubor.bloky)]
@@ -525,7 +577,14 @@ class HlavniOkno(QMainWindow):
             return
         if self.uprava is not None:
             self.akce_uprava.setChecked(False)
-        s.volba_kanalu, s.polarita = kanal, polarita
+        s.volba_kanalu, s.polarita, s.posun_kanalu = kanal, polarita, posun
+        if kanal == "soucet":
+            self._zapis(tr("Strana {0}: součet L+P, posun P {1}.").format(
+                cislo, tr("auto") if posun is None else f"{posun:+.0f} µs"))
+            v = self.vysledky.get(cislo)
+            if v is not None and v.nahravka.posun_us is None:
+                self._zapis(tr("Pozor: stopy spolu nesouhlasí (jiný obsah nebo jedna prázdná) – součet čtení "
+                               "spíš zhorší."))
         self._zapis(
             tr("Strana {0}: kanál {1}, polarita {2} – nová analýza.").format(
                 cislo,
@@ -534,6 +593,22 @@ class HlavniOkno(QMainWindow):
             )
         )
         self.analyzuj({cislo: Path(s.nahravka)})
+
+    def _nahled_posunu(self, hodnota: float) -> None:
+        """Ladění posunu: časová osa hned ukáže součet s novým posunem (analýza až po Enter)."""
+        v = self._strana_v()
+        if (hodnota == self.posun_kanalu.minimum() + self.posun_kanalu.singleStep() and v is not None
+                and v.nahravka.posun_us is not None and self.osa.posun_nahled is None):
+            self.posun_kanalu.setValue(round(v.nahravka.posun_us))   # z „auto“ se začne od změřeného
+            return
+        self.osa.posun_nahled = None if hodnota <= self.posun_kanalu.minimum() else hodnota
+        if self.volba_zobrazeni.currentData() != "soucet" and self.volba_zobrazeni.isEnabled():
+            self.volba_zobrazeni.setCurrentIndex(self.volba_zobrazeni.findData("soucet"))
+        self.osa.update()
+
+    def _zmena_zobrazeni(self, _=None) -> None:
+        self.osa.zobrazeni = self.volba_zobrazeni.currentData()
+        self.osa.update()
 
     # ------------------------------------------------------------ přehled, pulzy, histogram
     def _strana_v(self):
@@ -565,7 +640,10 @@ class HlavniOkno(QMainWindow):
                 casti.append(rt.replace(".", ",") if i18n.jazyk() == "cs" else rt)
             casti.append(f"{v.nahravka.vzorkovani_popis}, {v.nahravka.format_popis}")
             if v.nahravka.kanaly > 1:
-                casti.append((tr("levý"), tr("pravý"))[min(1, v.nahravka.kanal)] + tr(" kanál"))
+                if v.nahravka.kanal < 0:
+                    casti.append(tr("součet L+P (posun {0:+.0f} µs)").format(sig.get("posun_souctu_us") or 0))
+                else:
+                    casti.append((tr("levý"), tr("pravý"))[min(1, v.nahravka.kanal)] + tr(" kanál"))
             if sig.get("polarita_obracena"):
                 casti.append(tr("obrácená polarita"))
             self.info_strany.setText(" · ".join(casti))
@@ -721,6 +799,55 @@ class HlavniOkno(QMainWindow):
         if z:
             self._vyber_zaznam(z)
 
+    def nabidka_stromu(self, it) -> QMenu:
+        """Pravé tlačítko v Obsahu kazety: záznam označit jako šum / hudbu / řeč, ruční označení zrušit."""
+        m = QMenu(self)
+        d = it.data(0, Qt.ItemDataRole.UserRole) if it is not None else None
+        if not d or d[0] != "zaznam":
+            a = m.addAction(tr("Označit lze záznam (nerozpoznaný úsek, zvuk nebo program)"))
+            a.setEnabled(False)
+            return m
+        z = d[1]
+        strana = next((s.cislo for s in self.kazeta.strany if z in s.zaznamy), None)
+        if z.cas_od is None or z.cas_do is None or strana not in self.vysledky:
+            a = m.addAction(tr("Označit jde jen u načtené nahrávky strany"))
+            a.setEnabled(False)
+            return m
+        if z.rucni_usek:
+            druh = z.nazev.strip("()")
+            m.addAction(tr("Zrušit označení „{0}“").format(tr(druh)),
+                        lambda: self._oznac_usek(z.cas_od, z.cas_do, "", strana))
+            return m
+        m.addSection(f"{cas_text(z.cas_od)} – {cas_text(z.cas_do)}  {tr_data(z.nazev)}")
+        for druh in DRUHY_ZVUKU:
+            m.addAction(tr("Označit jako: {0}").format(tr(druh)),
+                        lambda d=druh: self._oznac_usek(z.cas_od, z.cas_do, d, strana))
+        return m
+
+    def _oznac_usek(self, od: float, do: float, druh: str, strana: int | None = None):
+        """Ručně označený úsek (šum, hudba, řeč) z časové osy nebo Obsahu kazety: hned se promítne do obsahu
+        a analýza ho příště vynechá; prázdný druh = zrušit označení. Bez `strana` = strana na časové ose."""
+        v = self.vysledky.get(strana) if strana is not None else self.osa.v
+        if v is None:
+            return
+        oznac_usek_vysledku(v, od, do, druh)
+        uplatni_rucni_useky(v)
+        self.osa.vyber = None
+        self.model.obnov()
+        self._obnov_strom()
+        self.detail.nastav(None)
+        self.prehled.nastav(self.vysledky)
+        self._zmena_pohledu(self.osa.od, self.osa.do)
+        self.osa.update()
+        if hasattr(self, "pruvodce"):
+            self.pruvodce.obnov()
+        if druh:
+            self._zapis(tr("Strana {0}: úsek {1} – {2} označen jako {3} (analýza ho vynechá).").format(
+                v.strana.cislo, cas_text(od), cas_text(do), tr(druh)))
+        else:
+            self._zapis(tr("Strana {0}: označení úseku {1} – {2} zrušeno; program v něm najde až nová "
+                           "analýza strany.").format(v.strana.cislo, cas_text(od), cas_text(do)))
+
     # ------------------------------------------------------------ režimy
     def prepni_rezim(self, klic: str):
         if klic not in self.stranky_rezimu:
@@ -735,20 +862,30 @@ class HlavniOkno(QMainWindow):
             self.pruvodce.obnov()
 
     # ------------------------------------------------------------ vzhled
-    def nastaveni_vzhledu(self):
-        d = DialogNastaveni(vzhled.Nastaveni.nacti(), self)
-        if d.exec() == QDialog.DialogCode.Accepted:
+    def nastaveni_vzhledu(self, zalozka: str = ""):
+        d = DialogNastaveni(vzhled.Nastaveni.nacti(), self, zalozka if isinstance(zalozka, str) else "")
+        prijato = d.exec() == QDialog.DialogCode.Accepted
+        if prijato:
+            d.uloz()
             n = d.vysledek()
             n.uloz()
             self.pouzij_vzhled(n)
-            if d.vybrany_jazyk() != i18n.jazyk():
-                i18n.uloz(d.vybrany_jazyk())
-                self._restart_kvuli_jazyku()
+        self.karta.obnov_profily()
+        self.pruvodce.karta.obnov_profily()
+        if prijato and d.vybrany_jazyk() != i18n.jazyk():
+            i18n.uloz(d.vybrany_jazyk())
+            self._restart_kvuli_jazyku()
+        elif d.restart:
+            self._restart(tr("Nové umístění nebo importované nastavení se plně projeví po restartu aplikace. "
+                             "Restartovat teď?"))
 
     def _restart_kvuli_jazyku(self):
         """Texty oken se vytvářejí při startu v nastaveném jazyce – nový jazyk vyžaduje restart."""
-        odp = QMessageBox.question(self, "SAKRA", "Jazyk se změní po restartu aplikace. Restartovat teď?\n\n"
-                                   "The language changes after restarting the application. Restart now?")
+        self._restart("Jazyk se změní po restartu aplikace. Restartovat teď?\n\n"
+                      "The language changes after restarting the application. Restart now?")
+
+    def _restart(self, otazka: str):
+        odp = QMessageBox.question(self, "SAKRA", otazka)
         if odp != QMessageBox.StandardButton.Yes or not self.close():
             return
         args = sys.argv[1:] if getattr(sys, "frozen", False) else ["-m", "sakra"] + sys.argv[1:]
@@ -779,8 +916,15 @@ class HlavniOkno(QMainWindow):
             return
         z, blok = self._vybrany or (None, None)
         s = z.soubor if z else None
-        if blok is None or blok.ok:
-            blok = next((b for b in s.bloky if not b.ok), None) if s else None
+        od, do = self.osa.od, self.osa.do
+        if s and (blok is None or blok.ok or not self._v_pohledu(blok, od, do)):
+            # vadný blok, na který se uživatel právě dívá (přiblížil si poškozené místo), jinak první vadný
+            vadne = [b for b in s.bloky if not b.ok]
+            v_pohledu = [b for b in vadne if self._v_pohledu(b, od, do)]
+            if v_pohledu:
+                blok = max(v_pohledu, key=lambda b: min(b.konec, do) - max(b.zacatek, od))
+            elif blok is None or blok.ok:
+                blok = vadne[0] if vadne else None
         strana = next((st.cislo for st in self.kazeta.strany if z in st.zaznamy), None)
         v = self.vysledky.get(strana)
         if blok is None or v is None:
@@ -792,7 +936,11 @@ class HlavniOkno(QMainWindow):
                        "pridano": 0, "odebrano": 0}
         self.osa.rezim_upravy = True
         self.osa.pridane = set()
-        self.osa.ukaz(blok.zacatek, blok.konec)
+        if self._v_pohledu(blok, od, do) and do - od < blok.konec - blok.zacatek + 1.0:
+            self.osa.vyber = (blok.zacatek, blok.konec)     # přiblížení na poškozené místo zůstává
+            self.osa.update()
+        else:
+            self.osa.ukaz(blok.zacatek, blok.konec)
         self.panel_upravy.show()
         cislo = f" {blok.cislo}" if blok.cislo is not None else ""
         self._stav_upravy(
@@ -802,6 +950,11 @@ class HlavniOkno(QMainWindow):
             ).format(cislo),
             "",
         )
+
+    @staticmethod
+    def _v_pohledu(blok, od: float, do: float) -> bool:
+        """Střed zobrazeného úseku leží v bloku (uživatel si blok přiblížil)."""
+        return blok.zacatek <= (od + do) / 2 <= blok.konec
 
     def _stav_upravy(self, text: str, barva: str):
         self.stav_upravy.setText(tr("<span style='color:{0}'>{1}</span>").format(barva, text) if barva else text)
@@ -983,7 +1136,15 @@ class HlavniOkno(QMainWindow):
     def nova(self):
         self.vysledky = {}
         self.cesta_projektu = None
-        self._nastav_kazetu(Kazeta())
+        self._nastav_kazetu(self._nova_kazeta())
+
+    def nahraj_z_magnetofonu(self):
+        """Strany kazety ze zvukového vstupu do WAV; nahrané se otevřou jako obvykle."""
+        from .nahravani import DialogNahravani
+        d = DialogNahravani(self.kazeta.inventar.cislo, self._slozka(), self)
+        if d.exec() == QDialog.DialogCode.Accepted and d.hotove:
+            self._pamatuj(str(d.hotove[0]))
+            self.otevri_nahravky([str(c) for c in d.hotove], zeptat=True)
 
     def otevri_nahravky(self, cesty=None, zeptat: bool | None = None):
         """`zeptat`: u nové kazety se zeptat na platformu (výchozí: jen při výběru souborů v dialogu)."""
@@ -1033,10 +1194,11 @@ class HlavniOkno(QMainWindow):
             if dale:
                 dale()
 
-        volby = {s.cislo: (s.volba_kanalu, s.polarita) for s in self.kazeta.strany}
+        volby = {s.cislo: (s.volba_kanalu, s.polarita, s.posun_kanalu) for s in self.kazeta.strany}
         platforma = self.kazeta.platforma
+        rucni = {s.cislo: list(s.rucni_useky) for s in self.kazeta.strany}
         self._spust(tr("Analyzuji ") + ", ".join(p.name for p in nahravky.values()),
-                    lambda pr: analyzuj_strany(nahravky, pr, volby, platforma), po, prubeh)
+                    lambda pr: analyzuj_strany(nahravky, pr, volby, platforma, rucni), po, prubeh)
 
     def otevri_projekt(self, cesta=None):
         if not cesta:
@@ -1152,7 +1314,7 @@ class HlavniOkno(QMainWindow):
         lay.addWidget(bb)
         if d.exec() != QDialog.DialogCode.Accepted or not kam.text():
             return None
-        self.nastaveni.setValue("archiv", kam.text())
+        nastaveni.zapamatuj_slozku("archiv", kam.text())
         return Path(kam.text()), zdroj.isChecked(), cisty.isChecked(), snimky.isChecked()
 
     def emuluj(self, z: Zaznam):
@@ -1186,11 +1348,17 @@ class HlavniOkno(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(NAVOD)))
 
     # ------------------------------------------------------------ pomocné
+    @staticmethod
+    def _nova_kazeta() -> Kazeta:
+        k = Kazeta()
+        nastaveni.pouzij_vychozi_profil(k)          # výchozí profil pracoviště předvyplní digitalizaci
+        return k
+
     def _slozka(self) -> str:
         return self.nastaveni.value("slozka", str(Path.home()))
 
     def _pamatuj(self, cesta: str):
-        self.nastaveni.setValue("slozka", str(Path(cesta).parent))
+        nastaveni.zapamatuj_slozku("slozka", Path(cesta).parent)
 
     def closeEvent(self, e):
         self.nastaveni.setValue("okno/geometrie", self.saveGeometry())

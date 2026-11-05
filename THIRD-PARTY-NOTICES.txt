@@ -14,6 +14,11 @@ shiboken6          LGPL-3.0-only (or GPL-2.0/3.0)                 https://www.qt
 numpy              BSD-3-Clause (and 0BSD, MIT, Zlib, CC0-1.0)    https://numpy.org
 soundfile          BSD-3-Clause (uses libsndfile, LGPL-2.1)       https://github.com/bastibe/python-soundfile
 cffi               MIT-0                                          https://cffi.readthedocs.io
+sounddevice        MIT (recording from the audio input)           https://python-sounddevice.readthedocs.io
+PortAudio          MIT (bundled with sounddevice on Win/macOS)    https://www.portaudio.com
+pycparser          BSD-3-Clause                                   https://github.com/eliben/pycparser
+OpenCV (optional)  Apache-2.0 (camera snapshots; the wheel bundles https://opencv.org
+                   FFmpeg under LGPL-2.1)
 openpyxl           MIT                                            https://openpyxl.readthedocs.io
 et_xmlfile         MIT                                            https://foss.heptapod.net/openpyxl/et_xmlfile
 zx                 MIT (ZX Spectrum emulator, Ivan Kosarev)       https://github.com/kosarev/zx

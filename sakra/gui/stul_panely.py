@@ -88,7 +88,8 @@ class PrehledKazety(QWidget):
             stopy = ob[:, : m * krok].reshape(ob.shape[0], m, krok).max(axis=2)
             dt = krok * n.krok_obalky
             barvy = self._barvy(v, m, dt)
-            return [("LP"[c] if c < 2 else str(c + 1), stopy[c], barvy if c == n.kanal else None, dt)
+            pouzite = {0, 1} if n.kanal < 0 else {n.kanal}          # součet: obě stopy
+            return [("LP"[c] if c < 2 else str(c + 1), stopy[c], barvy if c in pouzite else None, dt)
                     for c in range(ob.shape[0])]
         x = n.vzorky
         krok = max(1, len(x) // self.SLOUPCU)

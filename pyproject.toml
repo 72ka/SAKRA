@@ -1,18 +1,20 @@
 [project]
 name = "sakra"
-version = "0.3.0a1"
+version = "0.3.0a2"
 description = "SAKRA (a Swiss Army Knife for Retrogaming Archaeologists) – digitalizace a archivace audiokazet s programy pro staré počítače, pro potřeby Herního archivu (www.herniarchiv.cz)"
 authors = [{ name = "Jan Heřman (72ka)", email = "2hp@seznam.cz" }]
 # program: PolyForm Noncommercial 1.0.0 (komerční použití jen se souhlasem autora); návod a logo: CC BY-NC 4.0
 readme = "README.md"
 license = { text = "PolyForm-Noncommercial-1.0.0" }
 requires-python = ">=3.11"
+optional-dependencies = { kamera = ["opencv-python-headless>=4.8"] }   # snímek z USB kamery (velký, ~40 MB)
 dependencies = [
     # PySide6 6.12.0 na Pythonu 3.11 při každém kreslení ubírá referenci na None -> pád aplikace
     "PySide6-Essentials>=6.6,<6.12; python_version < '3.12'",
     "PySide6-Essentials>=6.6; python_version >= '3.12'",
     "numpy>=1.26",
     "soundfile>=0.12",
+    "sounddevice>=0.4",     # nahrávání ze zvukového vstupu (PortAudio; na Linuxu i bez něj přes parecord/arecord)
     "openpyxl>=3.1",
     "py7zr>=0.20",          # archivní balíček jako jeden soubor .7z
     "zx==0.13.15",          # emulátor ZX Spectra (snímky obrazovky); verze pevně, používá se jeho vnitřní API

@@ -1,7 +1,7 @@
 SAKRA – a Swiss Army Knife for Retrogaming Archaeologists
 =========================================================
 Digitalizace a archivace audiokazet s programy pro staré počítače.
-Verze 0.3.0 alpha 1 (0.3.0a1, 2026)
+Verze 0.3.0 alpha 2 (0.3.0a2, 2026)
 Autor: Jan Heřman, alias 72ka, 2026.
 Vyrobeno pro potřeby Herního archivu (www.herniarchiv.cz).
 
@@ -94,31 +94,83 @@ v Linuxu pw-play, paplay nebo aplay (balík alsa-utils), na macOS afplay.
 Sestavení pro pracovníky archivu (bez Pythonu)
 ----------------------------------------------
 Windows: instalator\sestav_windows.bat -> dist\SAKRA\ (SAKRA.exe, sakra-cli.exe pro dávky)
-         a s nainstalovaným Inno Setup 6 i dist\SAKRA-0.3.0a1-instalace.exe
+         a s nainstalovaným Inno Setup 6 i dist\SAKRA-0.3.0a2-instalace.exe
          (nabídka Start, ikona na ploše, otevírání projektů .sakra dvojklikem).
 Linux:   instalator/sestav_linux.sh -> dist/SAKRA/ (asi 190 MB)
+
+Automatické sestavení na GitHubu (.github/workflows/sestaveni.yml, GitHub Actions):
+  - každý push: testy na Linuxu a Windows,
+  - značka verze: git tag v0.3.0a2 && git push origin v0.3.0a2
+    -> testy, sestavení (Windows: instalátor + přenosný zip, Linux: tar.gz) a Release na GitHubu
+       se soubory ke stažení; alpha/beta/rc verze se označí jako „pre-release“,
+  - ručně: záložka Actions -> Sestavení -> Run workflow (soubory jsou u běhu jako „artifacts“).
+  Verzi je třeba předem nastavit v sakra/__init__.py a pyproject.toml (stejně jako ve značce).
 
 Ovládání (Pracovní stůl)
 ------------------------
 - Otevřít nahrávku… – strana se pozná z názvu („(1)“, „(2)“, „strana B“, „-A“); lze vybrat obě najednou.
-- Kanál (Auto / Levý / Pravý) a Polarita (Auto / Normální / Obrácená) v liště nahoře (pro zobrazenou stranu): po změně se strana
+- Nastavení (Ctrl+,): Vzhled; Profily pracoviště (výchozí, přejmenovat, smazat, upravit, import/export JSON);
+  Složky (kde hledat, kam ukládat, uložené analýzy; pamatovat si poslední složku ano/ne); Nastavení a data
+  (kde je konfigurace: systém / vlastní soubor INI / přenosný sakra.ini vedle programu / proměnná
+  SAKRA_NASTAVENI; export a import celého nastavení do JSON; mazání uložených analýz).
+- Kanál (Auto / Levý / Pravý / L+P součet) a Polarita (Auto / Normální / Obrácená) v liště nahoře (pro zobrazenou stranu): po změně se strana
   analyzuje znovu, volba se uloží s projektem. Auto polarita při vadném bloku zkusí i obrácený signál.
+  L+P sečte obě stopy srovnané o posun pravé proti levé (Posun P v µs, „auto“ = změřit); pomáhá u sešikmené
+  hlavy a slabých nahrávek. „Zobrazit“ nad časovou osou kreslí vstup analýzy, levou, pravou stopu, součet
+  nebo obě stopy pod sebou (jen zobrazení); bublina ukazuje změřený posun a shodu stop.
 - Časová osa: kolečko = přiblížení, tažení = posun, klik = výběr programu, dvojklik = celá strana,
   mezerník = přehrát vybraný úsek. Při velkém přiblížení jsou vidět jednotlivé vzorky a přechody,
   poškozené bloky červeně.
-- ✎ Ruční úprava (u programu s vadným blokem): přibližte kolečkem na jednotlivé vzorky; levé tlačítko
+- Ruční označení úseku (šum, hudba, řeč): Shift + tažení na časové ose vybere úsek (nebo klikněte na
+  program), pravé tlačítko → „Označit jako: šum / hudba / řeč“. Úsek se hned objeví v obsahu jako vlastní
+  řádek (typ Audio, do balíčku jako výřez WAV). Rozpoznané programy se z výběru odečtou (i s rezervou
+  1 s na zaváděcí tón), přeznačí se jen nerozpoznaná část; program se označí, jen když na něm leží celý
+  výběr (klik na program). Nerozpoznané kusy v označeném úseku zmizí a analýza ho
+  vynechá i při „Analyzovat znovu“ a po otevření projektu (uloží se s projektem). Na ose je šrafovaný
+  s ✎. Pravé tlačítko nad ním → „Zrušit označení“ (úsek se vrátí jako nerozpoznaný, program v něm najde
+  nová analýza). Totéž nabízí pravé tlačítko na záznamu v panelu Obsah kazety (Označit jako… /
+  Zrušit označení). Druh lze určit i u nerozpoznaného úseku v Průvodci (krok Platforma) a ve sloupci
+  Platforma: „žádná data – šum / hudba / řeč“.
+- Slabá místa signálu: nad vlnou čárky tam, kde úroveň v bloku klesne proti okolí (oranžová = slabé čtení
+  pod 50 %, červená = výpadek pod 25 %, výpadek je i podbarvený); bublina nad čárkou ukáže úroveň a délku.
+  Hodí se k nalezení místa pro ruční úpravu; ne každé slabé místo musí způsobit chybu.
+- ✎ Ruční úprava (u programu s vadným blokem): přiblížení zůstane, pokud je pohled uvnitř vadného bloku;
+  přibližte kolečkem na jednotlivé vzorky; levé tlačítko
   přidá přechod přes nulu přesně na místo kliknutí, pravé odebere nejbližší
   přechod (zákmit). Po každém kliknutí se blok znovu dekóduje a nad osou se ukáže, zda už sedí kontrolní
   součet; pak je blok „opraven“ (ruční úprava signálu +N/−M přechodů). „Vrátit úpravy“ vrátí původní stav,
   neúspěšná úprava se při ukončení vrátí sama.
+- Nahrát z magnetofonu (Soubor → Nahrát z magnetofonu…, Ctrl+R, nebo v Průvodci v kroku Nahrávka):
+  strana kazety ze zvukového vstupu rovnou do WAV „<inventární číslo> (<strana>).wav“ (44,1/48/96 kHz,
+  16/24 bitů, stereo/mono). Nejdřív „Sledovat úroveň“ (špičky do žluté; červená = přebuzeno, nahrát
+  znovu), pak Nahrávat a pustit magnetofon. Po zastavení lze nahrát další stranu; „Otevřít v SAKRA“
+  nahrávky zpracuje jako obvykle. Ladění hlavy (azimut) při sledování i nahrávání: histogram délek
+  pulzů (oranžová hlavní špička; čím užší, tím lépe), rozptyl ±% s nejlepší dosaženou hodnotou a u sterea
+  posun kanálů L/R v µs (zelená zóna kolem 0). Pusťte zaváděcí tón nebo data a šroubkem azimutu hledejte
+  nejmenší rozptyl a posun nejblíž 0 µs. Zvukový vstup: knihovna sounddevice (PortAudio, ve Windows a macOS
+  přibalené); na Linuxu bez libportaudio2 se použije parecord (pulseaudio-utils) nebo arecord (alsa-utils).
+- Uložené analýzy: hotová analýza strany se ukládá (Linux ~/.cache/sakra/analyzy, Windows
+  %LOCALAPPDATA%\SAKRA\cache\analyzy, nejvýš 4 GB, nejstarší se mažou), takže návrat ke kazetě z dávky
+  nebo otevření projektu je okamžité. Po změně nahrávky, voleb (kanál, polarita, platforma, ručně
+  označené úseky) nebo verze SAKRA se analyzuje znovu. Vymazání: Soubor → Nastavení → Uložené analýzy;
+  proměnná SAKRA_CACHE = jiná složka, nebo 0 = neukládat.
+- Karta kazety: datum digitalizace se navrhne podle času změny souboru nahrávky (u dvou stran starší);
+  dnešní datum se ukazuje jen do analýzy a neuloží se, dokud ho nezměníte.
+- Tabulka bloků v detailu: sloupec „Součet (pásek / spočteno)“ – kontrolní součet uložený na pásce
+  a spočtený z přečtených dat (zeleně shoda, červeně rozdíl), u formátů s hlavičkou zvlášť hlavička a
+  data (PMD 85, Maťo, Ondra ViLi, BBC/Acorn CRC-16, Amstrad CPC po segmentech). ZX81, Oric, ŠMS, POTAS
+  a MSX kontrolní součet nemají („bez součtu“).
 - Detail programu: údaje z hlaviček, části programu, náhled (ZX: výpis BASICu, nahrávací obrazovka,
   odkazem „Spustit v emulátoru“ i obrazovka po spuštění, začátek kódu; SAPI-1: text; ostatní: začátek dat hexadecimálně), bloky a opravy.
 - Obsah pásky: sloupce jako ve vzoru; žlutě podbarvené vyplnila SAKRA, ostatní doplní člověk
   (rozbalovací seznamy podle komentářů vzoru, u Platformy i ruční určení nerozpoznaného úseku – včetně
   „žádná data (šum, řeč, hudba…)“: typ Audio, do balíčku jen výřez WAV).
 - Přehled kazety: všechny strany, u sterea obě stopy (L/P), nezpracovaná stopa šedě.
-- Kazeta: hlavička vzoru; „Profil pracoviště“ si pamatuje magnetofon, převodník, DI-box a autora;
-  fotky kazety a obalu.
+- Kazeta: hlavička vzoru; „Profil pracoviště“ si pamatuje magnetofon, převodník, DI-box a autora
+  (výchozí profil se předvyplní do každé nové kazety, i v dávkách; správa profilů: tlačítko Spravovat…);
+  fotky kazety a obalu – ze souborů (Přidat fotky…) nebo z připojené kamery (Z kamery…: živý náhled,
+  Vyfotit uloží „<inventární číslo> foto <n>.jpg“). Kamera potřebuje volitelný doplněk OpenCV
+  (run.sh / run.bat ho instalují, jinak pip install opencv-python-headless nebo pip install -e ".[kamera]").
 - Načíst z Excelu – převezme ručně vyplněné údaje (páruje se podle názvu programu).
 
 Struktura

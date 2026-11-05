@@ -215,7 +215,7 @@ def _csw_z_nahravky(zdroj: Path, kanal: int, cil: Path, od: float, do: float) ->
     info = sf.info(str(zdroj))
     a, b = int(od * info.samplerate), int(do * info.samplerate)
     x, rate = sf.read(str(zdroj), start=max(0, a), stop=min(info.frames, b), dtype="float32", always_2d=True)
-    x = x[:, min(kanal, x.shape[1] - 1)]
+    x = x.mean(axis=1) if kanal < 0 else x[:, min(kanal, x.shape[1] - 1)]     # -1 = součet stop
     x = x - float(np.mean(x)) if len(x) else x
     m = float(np.max(np.abs(x))) if len(x) else 0.0
     p = najdi_pulzy((x / m * 30000).astype(np.int16) if m else x.astype(np.int16), rate)

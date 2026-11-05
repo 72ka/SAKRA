@@ -2,7 +2,8 @@
 
 Spuštění z kořene projektu:  python navod/snimky.py                  (česky do navod/obrazky – pro návod)
                              python navod/snimky.py --jazyk en --kam docs/screenshots   (pro README)
-Potřebuje skills/testdata/RH07860_v1 (ZX Spectrum) a HH08518 (2)_44kHz.wav (Ondra); nastavení uživatele nemění.
+Potřebuje skills/testdata/RH07860_v1 (ZX Spectrum), HH08518 (2)_44kHz.wav (Ondra) a pro ladění hlavy
+skills/testdata/HH09529 (1).wav a HH09613 (se šroubky).wav (stereo); nastavení uživatele nemění.
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 OBRAZKY = Path(__file__).resolve().parent / "obrazky"
 RH = KOREN / "skills" / "testdata" / "RH07860_v1" / "RH07860"
 HH = KOREN / "HH08518 (2)_44kHz.wav"
+TESTDATA = KOREN / "skills" / "testdata"
 SIRKA, VYSKA = 1360, 860
 
 
@@ -39,6 +41,7 @@ def main() -> None:
     tmp = Path(tempfile.mkdtemp(prefix="sakra-navod-"))
     for f in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):     # nastavení uživatele zůstane netknuté
         QSettings.setPath(f, QSettings.Scope.UserScope, str(tmp / "nastaveni"))
+    os.environ["SAKRA_NASTAVENI"] = str(tmp / "nastaveni" / "sakra.ini")
     app = QApplication.instance() or QApplication(["sakra"])
     from sakra.gui import vzhled
     from sakra.gui.aplikace import _preklad_qt, ikona
@@ -172,6 +175,78 @@ def main() -> None:
     uloz(o, "davky")
     o.close()
 
+    # ---------------------------------------------------------------- nahrávání a ladění hlavy
+    # skutečné digitalizace „přehrané“ do dialogu místo zvukové karty: HH09529 má posunuté kanály
+    # (šikmá hlava), „seřízeno“ = tytéž data s vyrovnaným posunem, HH09613 má jednu stopu prázdnou
+    import threading
+
+    import soundfile as sf
+
+    from sakra.gui.nahravani import DialogNahravani
+    from sakra.jadro.ladeni import posun_kanalu
+
+    def zvuk(soubor, od_s, sekund=8):
+        rate = sf.info(str(soubor)).samplerate
+        x, rate = sf.read(str(soubor), start=int(od_s * rate), frames=int(sekund * rate), always_2d=True)
+        return (x / max(1e-9, abs(x).max()) * 0.7 * 2 ** 31).astype("int32"), rate
+
+    def ladeni(x, rate, inv, jmeno):
+        class Prehravac:
+            def __init__(self, vstup, r, kanaly, pri_datech):
+                self.cb, self.bezi = pri_datech, False
+
+            def start(self):
+                self.bezi = True
+                threading.Thread(target=self._hraj, daemon=True).start()
+
+            def _hraj(self):
+                for i in range(0, len(x) - 4800, 4800):
+                    if not self.bezi:
+                        return
+                    self.cb(x[i:i + 4800])
+                    time.sleep(0.1)
+
+            def stop(self):
+                self.bezi = False
+        slozka = str(Path.home() / ("Nahravky" if arg.jazyk == "cs" else "Recordings"))
+        dn = DialogNahravani(inv, slozka, zdroj=Prehravac)
+        dn.slozka.setText(slozka)
+        dn.vzorkovani.setCurrentIndex(dn.vzorkovani.findData(rate))
+        dn.vstup.setItemText(0, "Line-in (USB zvuková karta)" if arg.jazyk == "cs" else "Line-in (USB sound card)")
+        dn.resize(620, dn.sizeHint().height())
+        dn.show()
+        dn.sledovat.setChecked(True)
+        konec = time.time() + 3.0
+        cekej(lambda: time.time() > konec)
+        uloz(dn, jmeno)
+        dn.sledovat.setChecked(False)
+        dn.close()
+
+    x, rate = zvuk(TESTDATA / "HH09529 (1).wav", 118)
+    ladeni(x, rate, "HH09529", "ladeni_spatne")
+    posun, _ = posun_kanalu(x[:, 0], x[:, 1], rate)
+    x[:, 1] = np.roll(x[:, 1], -int(round(posun * 1e-6 * rate)))
+    ladeni(x, rate, "HH09529", "ladeni_serizeno")
+    x, rate = zvuk(TESTDATA / "HH09613 (se šroubky).wav", 60)
+    ladeni(x, rate, "HH09613", "ladeni_mono")
+
+    # ---------------------------------------------------------------- stereo: obě stopy (HH09529, posun −114 µs)
+    o = HlavniOkno()
+    o.pouzij_vzhled(n)
+    o.resize(SIRKA, VYSKA)
+    o.show()
+    o.prepni_rezim("stul")
+    o.otevri_nahravky([str(TESTDATA / "HH09529 (1).wav")])
+    cekej(lambda: not (o.ukol and o.ukol.isRunning()))
+    radek = next(i for i, (_, z) in enumerate(o.model.radky) if z.soubor is not None)
+    o.tabulka.selectRow(radek)
+    b = o.model.radky[radek][1].soubor.bloky[0]
+    o.volba_zobrazeni.setCurrentIndex(o.volba_zobrazeni.findData("obe"))
+    t0 = b.zacatek + 0.3 * (b.konec - b.zacatek)
+    o.osa._nastav_rozsah(t0, t0 + 0.004)
+    uloz(o.osa, "stereo_obe")
+    o.close()
+
     # ---------------------------------------------------------------- o aplikaci
     from sakra.gui.o_aplikaci import DialogOAplikaci
     da = DialogOAplikaci(None, lambda: None)
@@ -180,10 +255,25 @@ def main() -> None:
     da.close()
 
     # ---------------------------------------------------------------- nastavení
-    dn = DialogNastaveni(n)
-    dn.show()
-    uloz(dn, "nastaveni")
-    dn.close()
+    from sakra import nastaveni
+    nastaveni.uloz_profily({
+        "Pracoviště 1": {"tape_deck": "Tesla", "tape_deck_model": "B 115", "sound_card": "Focusrite Scarlett 2i2",
+                         "di_box": "", "autor": "Jan Novák"},
+        "Dílna – Sony": {"tape_deck": "Sony", "tape_deck_model": "TC-K611S", "sound_card": "RME Babyface",
+                         "di_box": "Behringer DI400P", "autor": "Jan Novák"}}, "Pracoviště 1")
+    nastaveni.nastaveni().setValue("archiv", "D:/Archiv/SAKRA")              # ukázkové cesty (ne z tohoto stroje)
+    nastaveni.nastaveni().setValue("slozka", "D:/Digitalizace/Kazety")
+    nastaveni.nastaveni().setValue("nahravani/slozka", "D:/Digitalizace/Kazety")
+    from unittest import mock
+    for zalozka, jmeno in (("", "nastaveni"), ("profily", "nastaveni_profily"), ("slozky", "nastaveni_slozky"),
+                           ("data", "nastaveni_data")):
+        with mock.patch.object(nastaveni, "umisteni",
+                               lambda: ("system", "\\HKEY_CURRENT_USER\\Software\\HerniArchiv\\SAKRA")):
+            dn = DialogNastaveni(n, zalozka=zalozka)
+        dn.resize(720, 520)
+        dn.show()
+        uloz(dn, jmeno)
+        dn.close()
     print("Snímky:", OBRAZKY)
     os._exit(0)                                   # bez úklidu Qt (offscreen občas spadne při ukončení)
 
