@@ -26,6 +26,10 @@ PRIPADY = [   # (platforma, typ bloku, data bloku)
     ("acorn", "data", acorn_blok(b"TEST", 0, DATA, True)),
     ("cpc", "data", cpc_zaznam(0x16, DATA * 2)),
     ("atari-rom", "data", atari_zaznamy(DATA)[0]),
+    ("sord-m5", "H", b"H\x1f" + bytes(range(31)) + bytes([sum(range(31)) & 255])),
+    *[("sord-m5", typ, typ.encode() + bytes([len(DATA)]) + DATA + bytes([sum(DATA) & 255]))
+      for typ in "DEF"],
+    ("sord-m5", "D", b"D\0" + bytes(range(256)) + b"\x80"),
 ]
 
 
@@ -50,6 +54,16 @@ class Soucty(unittest.TestCase):
         self.assertIsNone(soucty_bloku("pmd85", Blok(0, 1, "nestandardní", None, DATA, True)))
         self.assertEqual(soucty_bloku("ondra-tesla", Blok(0, 1, "data", None, b"\x10", False)), [])
 
+    def test_sord_soucet_dat_a_chybejici_soucet(self):
+        def soucty(d):
+            return soucty_bloku("sord-m5", Blok(0, 1, "D", None, d, False))
+        self.assertEqual(soucty(b"D\x02\xff\x02\x01"), [("součet", 1, 1, 2)])
+        self.assertEqual(soucty(b"D\x02\xff\x02\x00"), [("součet", 0, 1, 2)])
+        self.assertEqual(soucty(b"D\x02\xff\x02"), [("součet", None, 1, 2)])
+        for d in (b"", b"D", b"D\x02\xff", b"D\x02\xff\x02\x01\x00", b"H\x01\xff\xff"):
+            with self.subTest(data=d):
+                self.assertEqual(soucty(d), [])
+
     def test_detail_ukaze_soucty(self):
         try:
             from PySide6.QtWidgets import QApplication
@@ -68,6 +82,19 @@ class Soucty(unittest.TestCase):
         text = det.text.toPlainText()
         self.assertIn("Součet (pásek / spočteno)", text)
         self.assertIn(f"XOR: {d[-1]:02X} / {d[-1]:02X}", text)
+
+        s = Soubor("sord-m5", "SORD", "SORD", "BASIC", bloky=[
+            Blok(0, 1, "D", None, b"D\x02\xff\x02\x01", True),
+            Blok(1, 2, "D", None, b"D\x02\xff\x02\x00", False),
+            Blok(2, 3, "D", None, b"D\x02\xff\x02", False)])
+        det.nastav(Zaznam(nazev="SORD", soubor=s))
+        text = det.text.toPlainText()
+        self.assertIn("součet: 01 / 01", text)
+        self.assertIn("součet: 00 / 01", text)
+        self.assertIn("součet: ? / 01", text)
+        html = det.text.toHtml().lower()
+        self.assertIn("#2ea866", html)
+        self.assertIn("#e04848", html)
 
 
 if __name__ == "__main__":

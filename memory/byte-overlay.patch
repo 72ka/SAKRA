@@ -1,0 +1,257 @@
+--- a/sakra/jadro/model.py
++++ b/sakra/jadro/model.py
+@@ -24,6 +24,7 @@
+     hrany: tuple[int, int] = (0, 0)  # rozsah v Pulzy.hrany (pro přesnou kopii signálu)
+     soucet_pasky: int | None = None  # kontrolní součet z pásky, pokud není v `data` (Commodore, Sharp)
+     nosna_zacatek: float | None = None  # synchronizační nosná před start bitem, mimo datový blok
++    hranice_bitu: list[list[float]] = field(default_factory=list)  # po bajtech: start, 8 dat, stop, konec (s)
+ 
+ 
+ class Nosna(Blok):
+--- a/sakra/platformy/sord.py
++++ b/sakra/platformy/sord.py
+@@ -56,6 +56,7 @@
+         # bez závislosti na polaritě nebo lichém počtu půlvln úvodního tónu.
+         data = bytearray()
+         chyby = []
++        hranice_bitu = []
+         i, n = b, None
+         konec = p.cas(u.i0 + b)
+         while i + 18 <= len(r):
+@@ -80,6 +81,7 @@
+                 # Stop bit přecházející do ticha nemá koncovou hranu.
+                 # Jeho konec odhadneme z nosné, nikoli až z dalšího signálu.
+                 konec = p.cas(u.i0 + i + 18) + 2 * s / 1e6
++            hranice_bitu.append([p.cas(u.i0 + i + 2 * q) for q in range(10)] + [konec])
+             i += 20
+             if len(data) == 1 and v not in b"HDEF":
+                 break
+@@ -100,7 +102,7 @@
+         nosna_zacatek = max(p.cas(u.i0 + a), out[-1].konec if out else 0.0)
+         out.append(Blok(p.cas(u.i0 + b), konec,
+                         chr(data[0]), None, bytes(data), bool(ok), chybne_bajty=chyby,
+-                        nosna_zacatek=nosna_zacatek))
++                        nosna_zacatek=nosna_zacatek, hranice_bitu=hranice_bitu))
+     return out
+ 
+ 
+--- a/sakra/gui/casova_osa.py
++++ b/sakra/gui/casova_osa.py
+@@ -22,6 +22,8 @@
+ BARVA_AUDIO = QColor("#A8B8D8")
+ BARVA_SLABE = QColor("#F08A24")       # slabé čtení (pokles úrovně)
+ BARVA_VYPADEK = QColor("#E03A3A")     # výpadek
++BARVA_START = QColor("#277DA8")
++BARVA_STOP = QColor("#8C55B5")
+ PRUH_SLABYCH = (42, 46)               # y pruhu slabých míst nad vlnou
+ BARVY_RUCNI = {"šum": QColor("#9AA0A8"), "hudba": QColor("#9B6BC9"), "řeč": QColor("#3A9E9A")}
+ 
+@@ -46,6 +48,7 @@
+         self._posunuto = False
+         self.prehravani: float | None = None     # kurzor přehrávání (s)
+         self.rezim_upravy = False                # klik přidává / odebírá přechody
++        self.bajty_viditelne = True              # přepínatelná vrstva bajtů/start/stop při přiblížení
+         self.pridane: set[int] = set()           # ručně přidané přechody (vzorky) – kreslí se zeleně
+         self.slaba = []                          # slabá místa signálu (SlabeMisto)
+         self.zobrazeni = "vstup"                 # stereo: vstup / levy / pravy / soucet / obe
+@@ -67,6 +70,10 @@
+         self.od, self.do = 0.0, max(0.01, self.delka)
+         self.update()
+         self.rozsah.emit(self.od, self.do)
++
++    def nastav_zobrazeni_bajtu(self, zobrazit: bool) -> None:
++        self.bajty_viditelne = zobrazit
++        self.update()
+ 
+     def viditelny_usek(self) -> tuple[float, float]:
+         """Co přehrát: vybraný úsek, jinak to, co je vidět (nejvýš 60 s)."""
+@@ -117,6 +124,7 @@
+             p.setPen(QPen(QColor("#D98B12"), 1))
+             p.drawLine(QPointF(a, 22), QPointF(a, h))
+             p.drawLine(QPointF(b, 22), QPointF(b, h))
++        self._bajty(p, horni, dolni)
+         if self.prehravani is not None:
+             x = self._x(self.prehravani)
+             p.setPen(QPen(QColor("#1F9254"), 2))
+@@ -342,6 +350,59 @@
+                     popis = f"{b.typ} {b.cislo}" if b.cislo is not None else b.typ
+                     p.drawText(QPointF(a + 3, horni + 12), popis + ("" if b.ok else " ✗"))
+ 
++    def viditelne_bajty(self):
++        """Jen skutečně dekódované rámce s dostatkem místa; IBG žádné rámce nemá."""
++        if not self.bajty_viditelne or not self.v or self.do - self.od > 0.25:
++            return
++        for s in self.v.soubory:
++            for b in s.bloky:
++                if b.konec <= self.od or b.zacatek >= self.do:
++                    continue
++                for i, h in enumerate(b.hranice_bitu):
++                    if len(h) != 11 or i >= len(b.data) or h[-1] <= self.od or h[0] >= self.do:
++                        continue
++                    if self._x(h[-1]) - self._x(h[0]) >= 50:
++                        yield b, i, h
++
++    def _bajty(self, p: QPainter, horni: int, dolni: int) -> None:
++        """Bajt v hexu; START modře, STOP fialově, datové bity v pořadí LSB → MSB."""
++        p.save()
++        p.setClipRect(QRectF(0, horni + 16, self.width(), max(0, dolni - horni - 16)))
++        font = QFont(self.font())
++        font.setPointSizeF(8)
++        p.setFont(font)
++        fm = p.fontMetrics()
++        for b, i, h in self.viditelne_bajty():
++            x = [self._x(t) for t in h]
++            chyba = i in b.chybne_bajty
++            barva = QColor("#C0392B") if chyba else self.palette().text().color()
++            for q, (a, c) in enumerate(zip(x, x[1:])):
++                if c <= 0 or a >= self.width():
++                    continue
++                role = BARVA_START if q == 0 else BARVA_STOP if q == 9 else None
++                if role is not None:
++                    pozadi = QColor(role)
++                    pozadi.setAlpha(35)
++                    p.fillRect(QRectF(a, horni + 32, c - a, dolni - horni - 32), pozadi)
++                p.fillRect(QRectF(a, horni + 32, c - a, 16), role or self.palette().alternateBase().color())
++                p.setPen(QPen(QColor(125, 135, 150, 110), 1, Qt.PenStyle.DotLine))
++                p.drawLine(QPointF(a, horni + 32), QPointF(a, dolni))
++                text = "START" if q == 0 else "STOP" if q == 9 else str((b.data[i] >> (q - 1)) & 1)
++                if c - a >= fm.horizontalAdvance(text) + 4:
++                    p.setPen(QColor("#ffffff") if role is not None else barva)
++                    p.drawText(QRectF(a, horni + 32, c - a, 16), Qt.AlignmentFlag.AlignCenter, text)
++            p.fillRect(QRectF(x[0], horni + 16, x[-1] - x[0], 16), self.palette().base())
++            p.setPen(barva)
++            kratky = f"{'! ' if chyba else ''}{b.data[i]:02X}"
++            popis = f"#{i} · {kratky}"
++            if x[-1] - x[0] < fm.horizontalAdvance(popis) + 6:
++                popis = kratky
++            p.drawText(QRectF(x[0], horni + 16, x[-1] - x[0], 16), Qt.AlignmentFlag.AlignCenter, popis)
++            p.setPen(QPen(barva, 1.5))
++            for a in (x[0], x[-1]):
++                p.drawLine(QPointF(a, horni + 16), QPointF(a, dolni))
++        p.restore()
++
+     # ---- ovládání ----
+     def wheelEvent(self, e):
+         if not self.v:
+--- a/sakra/gui/okno.py
++++ b/sakra/gui/okno.py
+@@ -161,6 +161,11 @@
+         akce_prehrat.setToolTip(tr("Přehrát vybraný úsek (mezerník)"))
+         nad_osou.addAction("■", self.zastav_prehravani).setToolTip(tr("Zastavit přehrávání"))
+         nad_osou.addSeparator()
++        self.akce_bajty = nad_osou.addAction(tr("Bajty a bity"))
++        self.akce_bajty.setCheckable(True)
++        self.akce_bajty.setChecked(True)
++        self.akce_bajty.setToolTip(tr("Po přiblížení: hranice bajtů a datových bitů; START modře, STOP fialově."))
++        self.akce_bajty.toggled.connect(self.osa.nastav_zobrazeni_bajtu)
+         self.akce_uprava = nad_osou.addAction(tr("✎ Ruční úprava"))
+         self.akce_uprava.setCheckable(True)
+         self.akce_uprava.setEnabled(False)
+@@ -398,6 +403,8 @@
+         lista.addWidget(self.volba_polarity)
+         for klic, text in REZIMY:
+             m_zobrazit.addAction(self.akce_rezimu[klic])
++        m_zobrazit.addSeparator()
++        m_zobrazit.addAction(self.akce_bajty)
+         prehrat = QAction(tr("Přehrát výběr"), self)
+         prehrat.setShortcut(QKeySequence(Qt.Key.Key_Space))
+         prehrat.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+--- a/sakra/preklady/en.py
++++ b/sakra/preklady/en.py
+@@ -6,6 +6,9 @@
+ from __future__ import annotations
+ 
+ TEXTY: dict[str, str] = {
++    "Bajty a bity": "Bytes and bits",
++    "Po přiblížení: hranice bajtů a datových bitů; START modře, STOP fialově.":
++        "Zoom in to see byte and data bit boundaries; START in blue, STOP in purple.",
+     "Nosná log. 1": "Logical 1 carrier",
+     "Nosná log. 1 – bez datových bajtů a kontrolního součtu.":
+         "Logical 1 carrier – no data bytes or checksum.",
+--- a/testy/test_sord.py
++++ b/testy/test_sord.py
+@@ -109,6 +109,9 @@
+                     self.assertEqual(b.zacatek, p.cas(i))
+                     self.assertLessEqual(b.nosna_zacatek, p.cas(nosna))
+                     self.assertLess(b.nosna_zacatek, b.zacatek)
++                    self.assertEqual(len(b.hranice_bitu), len(data))
++                    for j, h in enumerate(b.hranice_bitu):
++                        self.assertEqual(h, [p.cas(i + 20 * j + 2 * q) for q in range(11)])
+                     i += 20 * len(data)
+                     self.assertEqual(b.konec, p.cas(i))
+                     i += 8  # jedničky za posledním stop bitem už do bloku nepatří
+@@ -129,6 +132,8 @@
+                 self.assertEqual([b.data for b in bs], bb)
+                 self.assertTrue(all(b.ok for b in bs))
+                 self.assertAlmostEqual(bs[-1].konec, p.cas(stop) + 1 / 3150, delta=1 / 44100)
++                self.assertEqual(bs[-1].hranice_bitu[-1][-1], bs[-1].konec)
++                self.assertEqual(bs[-1].hranice_bitu[-1][-2], p.cas(stop))
+ 
+     def test_nosna_se_neoznaci_jako_nerozpoznana(self):
+         s = self.analyzuj(program(b"\xff"))[0]
+@@ -139,6 +144,7 @@
+             znovu = znovu_dekoduj_blok(self.vysledek, s, b)
+             self.assertIsNotNone(znovu)
+             self.assertEqual((znovu.zacatek, znovu.konec, znovu.data), (b.zacatek, b.konec, b.data))
++            self.assertEqual(znovu.hranice_bitu, b.hranice_bitu)
+ 
+     def test_ibg_je_pomocny_usek_bez_dat(self):
+         bb = program(bytes(range(256)) * 2)
+@@ -192,6 +198,7 @@
+         self.assertEqual([(b.zacatek, b.konec, b.nosna_zacatek) for b in obnoveny.bloky],
+                          [(b.zacatek, b.konec, b.nosna_zacatek) for b in s.bloky])
+         self.assertEqual(obnoveny.zacatek_signalu, s.zacatek_signalu)
++        self.assertEqual([b.hranice_bitu for b in obnoveny.bloky], [b.hranice_bitu for b in s.bloky])
+         out = podle_id("sord-m5").zapis(obnoveny, self.tmp / "obnova")
+         self.assertEqual(out[1].read_bytes(), data)
+         self.assertEqual(podle_id("sord-m5").nahled(obnoveny)["texty"][0][0], "Začátek dat")
+--- a/testy/test_gui.py
++++ b/testy/test_gui.py
+@@ -630,5 +630,47 @@
+                 o.close()
+ 
+ 
++    def test_sord_bajty_bity_zoom_a_vypnuti(self):
++        from testy.test_sord import program, pulzy
++        global APP
++        APP = QApplication.instance() or QApplication([])
++        with tempfile.TemporaryDirectory() as tmp:
++            wav = Path(tmp) / "HH00093 (1).wav"
++            uloz_wav(wav, signal_z_pulzu(pulzy(program(b"\xa5\x00\xff")), 44100), 44100)
++            o = HlavniOkno()
++            try:
++                o.resize(1400, 900)
++                o.show()
++                o.prepni_rezim("stul")
++                o.otevri_nahravky([str(wav)])
++                self._cekej(lambda: not (o.ukol and o.ukol.isRunning()))
++                z = o.model.radky[0][1]
++                s = z.soubor
++                b = s.bloky[1]
++                self.assertEqual(b.data[2], 0xA5)
++                osa = o.osa
++                osa.cele()
++                self.assertEqual(list(osa.viditelne_bajty()), [])
++                h = b.hranice_bitu[2]
++                osa._nastav_rozsah(h[0] - .001, h[-1] + .001)
++                videt = list(osa.viditelne_bajty())
++                self.assertTrue(any(blok is b and i == 2 and hranice == h for blok, i, hranice in videt))
++                self.assertTrue(o.akce_bajty.isChecked())
++                self.assertFalse(osa.grab().isNull())
++                pred = [(bb.data, bb.ok) for bb in s.bloky]
++                o.akce_bajty.trigger()
++                self.assertFalse(osa.bajty_viditelne)
++                self.assertEqual(list(osa.viditelne_bajty()), [])
++                o.akce_bajty.trigger()
++                self.assertEqual(list(osa.viditelne_bajty()), videt)
++                self.assertEqual([(bb.data, bb.ok) for bb in s.bloky], pred)
++                # Ve starém projektu nejsou pozice bitů; nedoplňovat falešnou mřížku.
++                for bb in s.bloky:
++                    bb.hranice_bitu = []
++                self.assertEqual(list(osa.viditelne_bajty()), [])
++            finally:
++                o.close()
++
++
+ if __name__ == "__main__":
+     unittest.main()

@@ -23,6 +23,12 @@ class Blok:
     chybne_bajty: list[int] = field(default_factory=list)
     hrany: tuple[int, int] = (0, 0)  # rozsah v Pulzy.hrany (pro přesnou kopii signálu)
     soucet_pasky: int | None = None  # kontrolní součet z pásky, pokud není v `data` (Commodore, Sharp)
+    nosna_zacatek: float | None = None  # synchronizační nosná před start bitem, mimo datový blok
+    hranice_bitu: list[list[float]] = field(default_factory=list)  # po bajtech: start, 8 dat, stop, konec (s)
+
+
+class Nosna(Blok):
+    """Pomocný úsek pro zobrazení signálu, ne datový blok v Soubor.bloky."""
 
 
 @dataclass
@@ -42,6 +48,13 @@ class Soubor:
     @property
     def zacatek(self) -> float:
         return self.bloky[0].zacatek if self.bloky else 0.0
+
+    @property
+    def zacatek_signalu(self) -> float:
+        """Začátek včetně synchronizační nosné, např. pro výřez původního WAV."""
+        if self.bloky and self.bloky[0].nosna_zacatek is not None:
+            return self.bloky[0].nosna_zacatek
+        return self.zacatek
 
     @property
     def konec(self) -> float:

@@ -35,6 +35,7 @@ _STYL: dict[str, tuple[str, str, str]] = {
     "MSX": ("MSX", "", "klavesnice"),
     "BBC Micro / Acorn Electron": ("BBC", "", "klavesnice"),
     "Oric": ("OR", "", "klavesnice"),
+    "Sord m5": ("M5", "", "klavesnice"),
     "Atari 8bit": ("A8", "", "klavesnice"),
     "Amstrad CPC": ("CPC", "", "klavesnice"),
     "Sharp MZ-700/800": ("MZ", "", "klavesnice"),

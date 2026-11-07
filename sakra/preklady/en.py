@@ -6,6 +6,12 @@ Hodnoty z dat (stavy, typy bloků, poznámky dekodérů) se překládají při z
 from __future__ import annotations
 
 TEXTY: dict[str, str] = {
+    "Bajty a bity": "Bytes and bits",
+    "Po přiblížení: hranice bajtů a datových bitů; START modře, STOP fialově.":
+        "Zoom in to see byte and data bit boundaries; START in blue, STOP in purple.",
+    "Nosná log. 1": "Logical 1 carrier",
+    "Nosná log. 1 – bez datových bajtů a kontrolního součtu.":
+        "Logical 1 carrier – no data bytes or checksum.",
     # ------------------------------------------------------------ režimy, nabídky, lišta
     "Průvodce": "Wizard",
     "Pracovní stůl": "Workbench",
