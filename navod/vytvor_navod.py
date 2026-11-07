@@ -550,7 +550,8 @@ kapitola("Podporované počítače", tab(
      ("ZX81 (ROM i FASTSAVER)", "P"), ("Commodore 64 / VIC-20", "TAP + PRG"), ("MSX", "CAS"),
      ("BBC Micro / Acorn Electron", "UEF + BIN"), ("Atari 8bit (600 Bd)", "CAS + XEX/BAS/BIN"),
      ("Atari 8bit Turbo 2000", "CAS + BIN"), ("Amstrad CPC", "CDT + BIN"), ("Sharp MZ-700/800", "MZF"),
-     ("Oric", "TAP"), ("ŠMS VÚVT Žilina", "BIN (Kansas City 300 Bd; kopie na pásce se porovnají)"),
+     ("Oric", "TAP"), ("Sord m5", "CAS (SORDM5) + BIN"),
+     ("ŠMS VÚVT Žilina", "BIN (Kansas City 300 Bd; kopie na pásce se porovnají)"),
      ("POTAS (ČSLA, VAAZ Brno)", "BIN + TXT (texty EDIS a BASIC v češtině; kopie většinovým hlasováním)"), ("nerozpoznaný úsek", "CSW (přesné pulzy) + WAV")],
     ("Počítač / způsob záznamu", "Formáty v balíčku"), (270, 396)) + """
 <p>U ZX Spectra tvoří zavaděč v BASICu a všechny bloky za ním (obrazovka, kód, bloky bez hlavičky, turbo)

@@ -11,7 +11,7 @@ from ..platformy import VSECHNY, Kontext, dekodery, podle_id
 from ..platformy.zx import sluc_programy
 from . import audio, mezipamet
 from .model import Kazeta, RucniUsek, Soubor, Strana, Zaznam
-from .pulzy import Pulzy, Usek, najdi_pulzy, rozdel_na_useky
+from .pulzy import Pulzy, Usek, histogram_us, najdi_pulzy, rozdel_na_useky
 
 PRAH_SKORE = 0.55          # od jakého skóre histogramu se zkusí dekodér platformy
 MIN_NEROZPOZNANO_S = 0.5   # kratší nerozpoznané úseky (lupnutí) se ignorují
@@ -142,7 +142,7 @@ def _analyzuj_nahravku(nahr, cesta, cislo: int, pr, platforma: str = "",
 
     strana = Strana(cislo, str(Path(cesta)), nahr.delka, nahr.vzorkovani_popis, nahr.format_popis, nahr.kanal)
     oblasti = [Oblast(s.zacatek, s.konec, s.platforma, s.nazev) for s in soubory]
-    nerozpoznane = _nerozpoznane(useky, soubory)
+    nerozpoznane = _nerozpoznane(useky, soubory, p)
     oblasti += [Oblast(a, b, None, "audio" if audio_ else "") for a, b, audio_ in nerozpoznane]
     oblasti.sort(key=lambda o: o.zacatek)
 
@@ -211,7 +211,7 @@ def uplatni_rucni_useky(v: VysledekStrany) -> None:
     v.soubory = [s for s in v.soubory if _prekryti(s.zacatek, s.konec, rucni) < 0.5 * (s.konec - s.zacatek)]
     nechane = {id(s) for s in v.soubory}
     useky = bez_rucnich(v.useky, v.pulzy, rucni)
-    nerozpoznane = _nerozpoznane(useky, v.soubory)
+    nerozpoznane = _nerozpoznane(useky, v.soubory, v.pulzy)
     stare = [z for z in v.strana.zaznamy if z.nerozpoznano and not z.rucni_usek]
 
     def stary(a: float, b: float) -> Zaznam | None:
@@ -252,7 +252,7 @@ def oznac_usek_vysledku(v: VysledekStrany, od: float, do: float, druh: str) -> N
     if not druh:
         oznac_usek(v.strana, od, do, "")
         return
-    programy = [RucniUsek(s.zacatek - PRED_PROGRAMEM_S, s.konec + ZA_PROGRAMEM_S, "") for s in v.soubory]
+    programy = [RucniUsek(s.zacatek_signalu - PRED_PROGRAMEM_S, s.konec + ZA_PROGRAMEM_S, "") for s in v.soubory]
     kusy = [(a, b) for a, b in _bez(od, do, programy) if b - a >= 0.05] or [(od, do)]
     for a, b in kusy:
         oznac_usek(v.strana, a, b, druh)
@@ -287,13 +287,32 @@ def _vyres_prekryvy(soubory: list[Soubor]) -> list[Soubor]:
     return out
 
 
-def _nerozpoznane(useky: list[Usek], soubory: list[Soubor]) -> list[tuple[float, float, bool]]:
-    kryto = [(s.zacatek - 1.0, s.konec + 0.5) for s in soubory]
+def _nerozpoznane(useky: list[Usek], soubory: list[Soubor], p: Pulzy) -> list[tuple[float, float, bool]]:
+    # Více programů může ležet v jednom souvislém úseku (např. Sord m5 má mezi
+    # bloky nosnou místo ticha). Sousední pokrytí se posuzuje společně.
+    kryto: list[tuple[float, float]] = []
+    for a, b in sorted((s.zacatek_signalu - 1.0, s.konec + 0.5) for s in soubory):
+        if kryto and a <= kryto[-1][1]:
+            kryto[-1] = (kryto[-1][0], max(kryto[-1][1], b))
+        else:
+            kryto.append((a, b))
     volne = [u for u in useky if not any(a <= u.zacatek and u.konec <= b for a, b in kryto)
              and not any(u.zacatek < b and a < u.konec and (min(b, u.konec) - max(a, u.zacatek)) > 0.8 * u.delka
                          for a, b in kryto)]
-    out: list[list] = []
+    # Šum může spojit více programů do jediného úseku. Z něj zbývají jen
+    # mezery; rozpoznané programy se nesmějí znovu označit jako nerozpoznané.
+    zbytky: list[Usek] = []
+    pokryti = [RucniUsek(a, b, "") for a, b in kryto]
     for u in volne:
+        for a, b in _bez(u.zacatek, u.konec, pokryti):
+            if b - a < MIN_NEROZPOZNANO_S:
+                continue
+            i0 = max(u.i0, int(np.searchsorted(p.hrany, a * p.rate)))
+            i1 = min(u.i1, int(np.searchsorted(p.hrany, b * p.rate, side="right")) - 1)
+            h = histogram_us(p.behy(i0, i1), p.rate)
+            zbytky.append(Usek(i0, i1, a, b, h))
+    out: list[list] = []
+    for u in zbytky:
         if out and u.zacatek - out[-1][1] < SLOUCIT_MEZERU_S and not any(
                 out[-1][1] <= s.zacatek <= u.zacatek for s in soubory):
             out[-1][1] = u.konec

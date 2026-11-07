@@ -9,7 +9,7 @@ import traceback
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import QProcess, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtCore import QProcess, QSignalBlocker, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QActionGroup, QColor, QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDockWidget,
                                QApplication, QDoubleSpinBox, QFileDialog, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
@@ -21,11 +21,11 @@ from .. import NAVOD, __version__
 from ..balicek import bezpecne_jmeno, exportuj as exportuj_balicek
 from ..jadro.analyza import (VysledekStrany, obnov_navrhy, oznac_usek_vysledku, prenes_rucni,
                               uplatni_rucni_useky, znovu_dekoduj_blok)
-from ..jadro.model import DRUHY_ZVUKU, Kazeta, Zaznam, cas_text
+from ..jadro.model import DRUHY_ZVUKU, Kazeta, Nosna, Zaznam, cas_text
 from ..jadro.pulzy import odeber_hranu, vloz_hranu
 from ..jadro.texty import pocet
 from ..metadata import excel
-from ..platformy import podle_id
+from ..platformy import bloky_pro_zobrazeni, podle_id
 from ..projekt import PRIPONA, analyzuj_strany, cislo_strany, otevri, uloz, vloz_vysledky
 from .. import i18n
 from .. import nastaveni
@@ -161,6 +161,11 @@ class HlavniOkno(QMainWindow):
         akce_prehrat.setToolTip(tr("Přehrát vybraný úsek (mezerník)"))
         nad_osou.addAction("■", self.zastav_prehravani).setToolTip(tr("Zastavit přehrávání"))
         nad_osou.addSeparator()
+        self.akce_bajty = nad_osou.addAction(tr("Bajty a bity"))
+        self.akce_bajty.setCheckable(True)
+        self.akce_bajty.setChecked(True)
+        self.akce_bajty.setToolTip(tr("Po přiblížení: hranice bajtů a datových bitů; START modře, STOP fialově."))
+        self.akce_bajty.toggled.connect(self.osa.nastav_zobrazeni_bajtu)
         self.akce_uprava = nad_osou.addAction(tr("✎ Ruční úprava"))
         self.akce_uprava.setCheckable(True)
         self.akce_uprava.setEnabled(False)
@@ -398,6 +403,8 @@ class HlavniOkno(QMainWindow):
         lista.addWidget(self.volba_polarity)
         for klic, text in REZIMY:
             m_zobrazit.addAction(self.akce_rezimu[klic])
+        m_zobrazit.addSeparator()
+        m_zobrazit.addAction(self.akce_bajty)
         prehrat = QAction(tr("Přehrát výběr"), self)
         prehrat.setShortcut(QKeySequence(Qt.Key.Key_Space))
         prehrat.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
@@ -749,7 +756,7 @@ class HlavniOkno(QMainWindow):
 
     # ------------------------------------------------------------ výběr
     def _vyber_zaznam(self, z: Zaznam, z_tabulky: bool = False, blok=None):
-        self.detail.nastav(z)
+        self.detail.nastav(z, blok)
         self._vybrany = (z, blok)
         # pulzy: místo chyby (kde se čtení zastavilo), jinak začátek vybraného bloku / programu
         vadne = [b for b in (z.soubor.bloky if z.soubor else []) if not b.ok]
@@ -760,7 +767,8 @@ class HlavniOkno(QMainWindow):
         else:
             self._kotva_pulzu = None
         if not self.akce_uprava.isChecked():
-            self.akce_uprava.setEnabled(bool(z.soubor and any(not b.ok for b in z.soubor.bloky)))
+            self.akce_uprava.setEnabled(bool(not isinstance(blok, Nosna) and z.soubor
+                                             and any(not b.ok for b in z.soubor.bloky)))
         strana = next((s.cislo for s in self.kazeta.strany if z in s.zaznamy), None)
         if strana is not None and strana != self.strana.currentData():
             self.strana.setCurrentIndex(self.strana.findData(strana))
@@ -771,7 +779,10 @@ class HlavniOkno(QMainWindow):
         if not z_tabulky:
             r = self.model.radek_zaznamu(z)
             if r >= 0:
-                self.tabulka.selectRow(r)
+                # Program v tabulce se označí bez opětovného výběru celého
+                # programu, který by přepsal právě zvolený blok nebo IBG.
+                with QSignalBlocker(self.tabulka.selectionModel()):
+                    self.tabulka.selectRow(r)
                 self.tabulka.scrollTo(self.model.index(r, 0))
 
     def _vybran_radek(self, aktualni, _):
@@ -794,6 +805,12 @@ class HlavniOkno(QMainWindow):
         s = next((s for s in self.kazeta.strany if s.cislo == self.strana.currentData()), None)
         if not s:
             return
+        for z in s.zaznamy:
+            if z.soubor:
+                for b in bloky_pro_zobrazeni(z.soubor):
+                    if isinstance(b, Nosna) and b.zacatek <= t < b.konec:
+                        self._vyber_zaznam(z, blok=b)
+                        return
         z = next((z for z in s.zaznamy if z.cas_od is not None and z.cas_do is not None
                   and z.cas_od - 0.5 <= t <= z.cas_do + 0.5), None)
         if z:

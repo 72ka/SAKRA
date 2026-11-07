@@ -129,7 +129,7 @@ def exportuj(kazeta: Kazeta, kam: Path, vysledky: dict[int, VysledekStrany] | No
                     vystupy.append(w)
                 if zdroj and zdroj.exists() and z.cas_od is not None and z.cas_do is not None:
                     w = d / (zaklad + (" (původní).wav" if cisty else ".wav"))
-                    _vyrez_wav(zdroj, w, z.cas_od, z.cas_do)
+                    _vyrez_wav(zdroj, w, min(z.cas_od, z.soubor.zacatek_signalu), z.cas_do)
                     vystupy.append(w)
                 z.soubor.vystup = {p.name: sha1(p) for p in vystupy}
             elif z.nerozpoznano and z.cas_od is not None and z.cas_do is not None:

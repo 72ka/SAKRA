@@ -8,7 +8,7 @@ from PySide6.QtGui import QImage, QTextDocument
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QTextBrowser, QVBoxLayout, QWidget
 
 from ..jadro.analyza import popis_stavu
-from ..jadro.model import Zaznam, cas_text
+from ..jadro.model import Nosna, Zaznam, cas_text
 from ..platformy import podle_id
 from ..i18n import tr, tr_data
 from . import ikony
@@ -39,6 +39,8 @@ SKRYT = {"texty", "basic", "casti", "casovani", "turbo"}
 
 def _soucty_html(platforma: str, blok) -> str:
     """Součty bloku: na pásce / spočteno (zeleně shoda, červeně rozdíl)."""
+    if isinstance(blok, Nosna):
+        return "—"
     soucty = soucty_bloku(platforma, blok)
     if soucty is None:
         return f"<span style='color:#8A93A3'>{html.escape(tr('bez součtu'))}</span>"
@@ -102,7 +104,7 @@ class Detail(QWidget):
         self.z: Zaznam | None = None
         self.nastav(None)
 
-    def nastav(self, z: Zaznam | None) -> None:
+    def nastav(self, z: Zaznam | None, blok=None) -> None:
         self.z = z
         self.tlacitko.setEnabled(bool(z and z.soubor))
         bloky = z.soubor.bloky if z is not None and z.soubor else []
@@ -117,7 +119,7 @@ class Detail(QWidget):
                     "BLOKY DAT · {0}<br><span style='font-weight:normal'><span style='color:#2EA866'>■</span> bez chyby "
                     " <span style='color:#E3A72F'>■</span> opraveno{1}  <span style='color:#E04848'>■</span> "
                     "chyba{2}</span>"
-                ).format(len(bloky), f' ({oprav})' if oprav else '', f' ({vadne})' if vadne else '')
+                ).format(len(z.soubor.bloky), f' ({oprav})' if oprav else '', f' ({vadne})' if vadne else '')
             )
         if z is None:
             self.text.setHtml(
@@ -177,7 +179,12 @@ class Detail(QWidget):
         if s.info.get("casti"):
             casti.append(tr("<h4 style='margin:10px 0 4px'>Části programu</h4><ol style='margin-top:0'>")
                          + "".join(f"<li>{e(tr_data(c))}</li>" for c in s.info["casti"]) + "</ol>")
-        casti.append(self._nahled(pl, s))
+        if isinstance(blok, Nosna):
+            self.text.obrazky.clear()
+            casti.append(f"<h4>IBG · {cas_text(blok.zacatek)}–{cas_text(blok.konec)}</h4><p>"
+                         + e(tr("Nosná log. 1 – bez datových bajtů a kontrolního součtu.")) + "</p>")
+        else:
+            casti.append(self._nahled(pl, s))
         casti.append(
             tr(
                 "<h4 style='margin:10px 0 4px'>Bloky</h4><table cellspacing=0 cellpadding=2 "
@@ -186,9 +193,9 @@ class Detail(QWidget):
                 "align=left>Oprava / chyba</th></tr>"
             )
         )
-        for b in s.bloky:
-            st = "✓" if b.ok else "✗"
-            bar = "#2EA866" if b.ok else "#E04848"
+        for b in bloky:
+            st = "—" if isinstance(b, Nosna) else "✓" if b.ok else "✗"
+            bar = "#8A93A3" if isinstance(b, Nosna) else "#2EA866" if b.ok else "#E04848"
             pozn = tr_data(b.oprava) or (tr("neznámé bajty {0}").format(len(b.chybne_bajty)) if b.chybne_bajty else "")
             casti.append(
                 tr(

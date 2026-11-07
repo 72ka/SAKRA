@@ -576,5 +576,101 @@ class Gui(unittest.TestCase):
         o.close()
 
 
+    def test_sord_ibg_jen_na_ose(self):
+        from PySide6.QtCore import Qt
+        from sakra.i18n import tr
+        from sakra.jadro.model import Nosna
+        from sakra.platformy import bloky_pro_zobrazeni
+        from testy.test_sord import program, pulzy
+        global APP
+        APP = QApplication.instance() or QApplication([])
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "HH00092 (1).wav"
+            bb = program(bytes(range(16)), b"PRVNI")
+            bb[1] = bb[1][:-1] + bytes([bb[1][-1] ^ 1])
+            uloz_wav(wav, signal_z_pulzu(pulzy(bb + program(b"DRUHY", b"DRUHY")), 44100), 44100)
+            o = HlavniOkno()
+            try:
+                o.resize(1400, 900)
+                o.show()
+                o.prepni_rezim("stul")
+                o.otevri_nahravky([str(wav)])
+                self._cekej(lambda: not (o.ukol and o.ukol.isRunning()))
+                self.assertEqual(len(o.model.radky), 2)
+                o.tabulka.selectRow(1)
+                prvni = o.strom.topLevelItem(0).child(0)
+                self.assertEqual(prvni.childCount(), 2)
+                self.assertEqual([prvni.child(i).data(0, Qt.ItemDataRole.UserRole)[2].typ for i in range(2)],
+                                 ["H", "D"])
+                z = o.model.radky[0][1]
+                ibg = next(b for b in bloky_pro_zobrazeni(z.soubor) if isinstance(b, Nosna))
+                o._klik_na_ose((ibg.zacatek + ibg.konec) / 2)
+                z, ibg = o._vybrany
+                self.assertIsInstance(ibg, Nosna)
+                self.assertEqual(o.osa.vyber, (ibg.zacatek, ibg.konec))
+                self.assertEqual(z.nazev, "PRVNI")
+                self.assertEqual(len(z.soubor.bloky), 2)
+                self.assertEqual(o.detail.mrizka.bloky, z.soubor.bloky)
+                self.assertNotIn("IBG", o.detail.nadpis_bloku.text())
+                self.assertEqual(o.detail.text.toPlainText().count("IBG"), 1)  # jen popis právě vybrané nosné
+                self.assertIn(tr("Nosná log. 1 – bez datových bajtů a kontrolního součtu."),
+                              o.detail.text.toPlainText())
+                self.assertNotIn(tr("Začátek dat"), o.detail.text.toPlainText())
+                self.assertFalse(o.akce_uprava.isEnabled())
+                dalsi = o.detail.mrizka.bloky[1]
+                o.detail.mrizka.vybran.emit(dalsi)
+                self.assertEqual(o.osa.vyber, (dalsi.zacatek, dalsi.konec))
+                self.assertNotIn("IBG", o.detail.text.toPlainText())
+                o._klik_na_ose((ibg.zacatek + ibg.konec) / 2)
+                self.assertEqual(o.osa.vyber, (ibg.zacatek, ibg.konec))
+                self.assertIsInstance(o._vybrany[1], Nosna)
+                APP.processEvents()
+                self.assertFalse(o.grab().isNull())
+            finally:
+                o.close()
+
+
+    def test_sord_bajty_bity_zoom_a_vypnuti(self):
+        from testy.test_sord import program, pulzy
+        global APP
+        APP = QApplication.instance() or QApplication([])
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "HH00093 (1).wav"
+            uloz_wav(wav, signal_z_pulzu(pulzy(program(b"\xa5\x00\xff")), 44100), 44100)
+            o = HlavniOkno()
+            try:
+                o.resize(1400, 900)
+                o.show()
+                o.prepni_rezim("stul")
+                o.otevri_nahravky([str(wav)])
+                self._cekej(lambda: not (o.ukol and o.ukol.isRunning()))
+                z = o.model.radky[0][1]
+                s = z.soubor
+                b = s.bloky[1]
+                self.assertEqual(b.data[2], 0xA5)
+                osa = o.osa
+                osa.cele()
+                self.assertEqual(list(osa.viditelne_bajty()), [])
+                h = b.hranice_bitu[2]
+                osa._nastav_rozsah(h[0] - .001, h[-1] + .001)
+                videt = list(osa.viditelne_bajty())
+                self.assertTrue(any(blok is b and i == 2 and hranice == h for blok, i, hranice in videt))
+                self.assertTrue(o.akce_bajty.isChecked())
+                self.assertFalse(osa.grab().isNull())
+                pred = [(bb.data, bb.ok) for bb in s.bloky]
+                o.akce_bajty.trigger()
+                self.assertFalse(osa.bajty_viditelne)
+                self.assertEqual(list(osa.viditelne_bajty()), [])
+                o.akce_bajty.trigger()
+                self.assertEqual(list(osa.viditelne_bajty()), videt)
+                self.assertEqual([(bb.data, bb.ok) for bb in s.bloky], pred)
+                # Ve starém projektu nejsou pozice bitů; nedoplňovat falešnou mřížku.
+                for bb in s.bloky:
+                    bb.hranice_bitu = []
+                self.assertEqual(list(osa.viditelne_bajty()), [])
+            finally:
+                o.close()
+
+
 if __name__ == "__main__":
     unittest.main()

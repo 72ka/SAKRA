@@ -61,6 +61,13 @@ def soucty_bloku(platforma: str, blok) -> list[Soucet] | None:
 
 
 def _soucty(platforma: str, blok, d: bytes) -> list[Soucet]:
+    if platforma == "sord-m5" and len(d) >= 2 and d[0] in b"HDEF":
+        n = d[1] or 256
+        if (d[0] != ord("H") or n == 31) and len(d) in (n + 2, n + 3):
+            # Typ a délka nejsou součástí součtu. Chybějící poslední bajt
+            # nehádat: úplná data lze sečíst i bez součtu přečteného z pásky.
+            pasek = d[n + 2] if len(d) == n + 3 else None
+            return [Soucet("součet", pasek, sum(d[2:n + 2]) & 0xFF)]
     if platforma in ("zx-rom", "zx-turbo", "atari-t2k") and len(d) >= 2:
         return [Soucet("XOR", d[-1], _xor(d[:-1]))]
     if platforma in ("ondra-tesla", "sapi1-mikos") and len(d) == 275:

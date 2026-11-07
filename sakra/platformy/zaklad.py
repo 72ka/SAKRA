@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from ..jadro.audio import Nahravka
-from ..jadro.model import Soubor
+from ..jadro.model import Blok, Soubor
 from ..jadro.pulzy import HIST_KROK_US, Pulzy, Usek, najdi_pulzy, odecti_stred
 from ..jadro.texty import hex_vypis
 
@@ -59,6 +59,10 @@ class Platforma:
 
     def turbo(self, soubor: Soubor) -> str:
         return "Není v Turbo"
+
+    def bloky_pro_zobrazeni(self, s: Soubor) -> list[Blok]:
+        """Datové bloky a případné pomocné úseky signálu pouze pro GUI."""
+        return s.bloky
 
     def nahled(self, s: Soubor) -> dict:
         """Náhled programu: {"obrazky": [(popis, RGB pole)], "texty": [(popis, text)]}.

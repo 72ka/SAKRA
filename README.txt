@@ -40,12 +40,16 @@ Co umí
     Amstrad CPC                         -> CDT + BIN
     Sharp MZ-700/800                    -> MZF
     Oric (rychlý i pomalý záznam)       -> TAP
+    Sord m5                            -> CAS (SORDM5) + BIN
     POTAS (ČSLA, VAAZ Brno; synchronní) -> BIN + TXT (texty EDIS, BASIC); kopie většinovým hlasováním
     ŠMS VÚVT Žilina (Kansas City 300 Bd) -> BIN (adresa není na pásce – bývá namluvená; kopie ověří/opraví)
     nerozpoznané úseky                  -> CSW (přesné pulzy) + výřez WAV; platformu jde určit ručně
 - Kontroluje součty bloků; poškozený blok zkusí přečíst znovu a opraví ho z jiné kopie na kazetě
   (Ondra, SAPI, PMD 85; C64 a Sharp mají každý blok na pásce dvakrát). Formáty bez součtu
   (MSX, ZX81, Oric) mají stav „bez součtu“ – úplnost je ověřená délkou a strukturou.
+- Sord m5: čte hlavičku a datové bloky, ověřuje součty modulo 256; CAS zachová původní bloky,
+  BIN obsahuje data bez hlaviček a výplně posledního bloku. Nesouvislé bloky E/F se uchovají v CAS,
+  jejich úplnost se neurčuje a BIN se pro ně nevytváří. Turbozavaděče nejsou podporované.
 - Metadata přesně podle vzoru Herního archivu (HH08518.xlsx): načtení i uložení Excelu,
   ručně vyplněné údaje se při nové analýze zachovají. Technické údaje na listu „SAKRA“.
 - Archivní balíček: složka s inventárním číslem, Excel, JSON, protokol (HTML a PDF), fotky kazety,

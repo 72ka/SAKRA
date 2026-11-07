@@ -12,9 +12,9 @@ from PySide6.QtWidgets import QMenu, QToolTip, QWidget
 
 from ..jadro.analyza import VysledekStrany
 from ..jadro import audio
-from ..jadro.model import DRUHY_ZVUKU, cas_text
+from ..jadro.model import DRUHY_ZVUKU, Nosna, cas_text
 from ..jadro.slabe import slaba_mista_strany
-from ..platformy import podle_id
+from ..platformy import bloky_pro_zobrazeni, podle_id
 from ..i18n import tr
 
 KROKY = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600]
@@ -22,6 +22,8 @@ BARVA_NEZNAME = QColor("#8A93A3")
 BARVA_AUDIO = QColor("#A8B8D8")
 BARVA_SLABE = QColor("#F08A24")       # slabé čtení (pokles úrovně)
 BARVA_VYPADEK = QColor("#E03A3A")     # výpadek
+BARVA_START = QColor("#277DA8")
+BARVA_STOP = QColor("#8C55B5")
 PRUH_SLABYCH = (42, 46)               # y pruhu slabých míst nad vlnou
 BARVY_RUCNI = {"šum": QColor("#9AA0A8"), "hudba": QColor("#9B6BC9"), "řeč": QColor("#3A9E9A")}
 
@@ -46,6 +48,7 @@ class CasovaOsa(QWidget):
         self._posunuto = False
         self.prehravani: float | None = None     # kurzor přehrávání (s)
         self.rezim_upravy = False                # klik přidává / odebírá přechody
+        self.bajty_viditelne = True              # přepínatelná vrstva bajtů/start/stop při přiblížení
         self.pridane: set[int] = set()           # ručně přidané přechody (vzorky) – kreslí se zeleně
         self.slaba = []                          # slabá místa signálu (SlabeMisto)
         self.zobrazeni = "vstup"                 # stereo: vstup / levy / pravy / soucet / obe
@@ -67,6 +70,10 @@ class CasovaOsa(QWidget):
         self.od, self.do = 0.0, max(0.01, self.delka)
         self.update()
         self.rozsah.emit(self.od, self.do)
+
+    def nastav_zobrazeni_bajtu(self, zobrazit: bool) -> None:
+        self.bajty_viditelne = zobrazit
+        self.update()
 
     def viditelny_usek(self) -> tuple[float, float]:
         """Co přehrát: vybraný úsek, jinak to, co je vidět (nejvýš 60 s)."""
@@ -117,6 +124,7 @@ class CasovaOsa(QWidget):
             p.setPen(QPen(QColor("#D98B12"), 1))
             p.drawLine(QPointF(a, 22), QPointF(a, h))
             p.drawLine(QPointF(b, 22), QPointF(b, h))
+        self._bajty(p, horni, dolni)
         if self.prehravani is not None:
             x = self._x(self.prehravani)
             p.setPen(QPen(QColor("#1F9254"), 2))
@@ -167,6 +175,18 @@ class CasovaOsa(QWidget):
                                            tr("zvuk") if o.nazev == "audio" else tr("nerozpoznáno"))
                 p.drawText(r.adjusted(4, 0, -2, 0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                            p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, int(b - a - 6)))
+
+        # IBG je rozpoznaná nosná, ale samostatný úsek bez datových bajtů.
+        for s in self.v.soubory:
+            for b in bloky_pro_zobrazeni(s):
+                if not isinstance(b, Nosna) or b.konec < self.od or b.zacatek > self.do:
+                    continue
+                a, c = self._x(b.zacatek), self._x(b.konec)
+                r = QRectF(a, 23, max(2.0, c - a), 18)
+                p.fillRect(r, BARVA_NEZNAME)
+                if c - a > 30:
+                    p.setPen(QColor("#ffffff"))
+                    p.drawText(r.adjusted(4, 0, -2, 0), Qt.AlignmentFlag.AlignVCenter, b.typ)
 
     @staticmethod
     def _barva_oblasti(o, pl) -> QColor:
@@ -311,13 +331,15 @@ class CasovaOsa(QWidget):
         if self.do - self.od > 120:
             return
         for s in self.v.soubory:
-            if s.konec < self.od or s.zacatek > self.do:
+            if s.konec < self.od or s.zacatek_signalu > self.do:
                 continue
-            for b in s.bloky:
+            for b in bloky_pro_zobrazeni(s):
                 if b.konec < self.od or b.zacatek > self.do:
                     continue
                 a, c = self._x(b.zacatek), self._x(b.konec)
-                if not b.ok:
+                if isinstance(b, Nosna):
+                    p.fillRect(QRectF(a, horni, max(2, c - a), dolni - horni), QColor(138, 147, 163, 60))
+                elif not b.ok:
                     p.fillRect(QRectF(a, horni, max(2, c - a), dolni - horni), QColor(239, 91, 91, 60))
                 elif b.oprava:
                     p.fillRect(QRectF(a, horni, max(2, c - a), dolni - horni), QColor(242, 193, 78, 50))
@@ -327,6 +349,59 @@ class CasovaOsa(QWidget):
                     p.setPen(self.palette().text().color())
                     popis = f"{b.typ} {b.cislo}" if b.cislo is not None else b.typ
                     p.drawText(QPointF(a + 3, horni + 12), popis + ("" if b.ok else " ✗"))
+
+    def viditelne_bajty(self):
+        """Jen skutečně dekódované rámce s dostatkem místa; IBG žádné rámce nemá."""
+        if not self.bajty_viditelne or not self.v or self.do - self.od > 0.25:
+            return
+        for s in self.v.soubory:
+            for b in s.bloky:
+                if b.konec <= self.od or b.zacatek >= self.do:
+                    continue
+                for i, h in enumerate(b.hranice_bitu):
+                    if len(h) != 11 or i >= len(b.data) or h[-1] <= self.od or h[0] >= self.do:
+                        continue
+                    if self._x(h[-1]) - self._x(h[0]) >= 50:
+                        yield b, i, h
+
+    def _bajty(self, p: QPainter, horni: int, dolni: int) -> None:
+        """Bajt v hexu; START modře, STOP fialově, datové bity v pořadí LSB → MSB."""
+        p.save()
+        p.setClipRect(QRectF(0, horni + 16, self.width(), max(0, dolni - horni - 16)))
+        font = QFont(self.font())
+        font.setPointSizeF(8)
+        p.setFont(font)
+        fm = p.fontMetrics()
+        for b, i, h in self.viditelne_bajty():
+            x = [self._x(t) for t in h]
+            chyba = i in b.chybne_bajty
+            barva = QColor("#C0392B") if chyba else self.palette().text().color()
+            for q, (a, c) in enumerate(zip(x, x[1:])):
+                if c <= 0 or a >= self.width():
+                    continue
+                role = BARVA_START if q == 0 else BARVA_STOP if q == 9 else None
+                if role is not None:
+                    pozadi = QColor(role)
+                    pozadi.setAlpha(35)
+                    p.fillRect(QRectF(a, horni + 32, c - a, dolni - horni - 32), pozadi)
+                p.fillRect(QRectF(a, horni + 32, c - a, 16), role or self.palette().alternateBase().color())
+                p.setPen(QPen(QColor(125, 135, 150, 110), 1, Qt.PenStyle.DotLine))
+                p.drawLine(QPointF(a, horni + 32), QPointF(a, dolni))
+                text = "START" if q == 0 else "STOP" if q == 9 else str((b.data[i] >> (q - 1)) & 1)
+                if c - a >= fm.horizontalAdvance(text) + 4:
+                    p.setPen(QColor("#ffffff") if role is not None else barva)
+                    p.drawText(QRectF(a, horni + 32, c - a, 16), Qt.AlignmentFlag.AlignCenter, text)
+            p.fillRect(QRectF(x[0], horni + 16, x[-1] - x[0], 16), self.palette().base())
+            p.setPen(barva)
+            kratky = f"{'! ' if chyba else ''}{b.data[i]:02X}"
+            popis = f"#{i} · {kratky}"
+            if x[-1] - x[0] < fm.horizontalAdvance(popis) + 6:
+                popis = kratky
+            p.drawText(QRectF(x[0], horni + 16, x[-1] - x[0], 16), Qt.AlignmentFlag.AlignCenter, popis)
+            p.setPen(QPen(barva, 1.5))
+            for a in (x[0], x[-1]):
+                p.drawLine(QPointF(a, horni + 16), QPointF(a, dolni))
+        p.restore()
 
     # ---- ovládání ----
     def wheelEvent(self, e):

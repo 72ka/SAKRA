@@ -87,6 +87,7 @@ The interface is available in **English and Czech**; the screenshots above are f
 | Amstrad CPC | CDT + BIN |
 | Sharp MZ-700/800 | MZF |
 | Oric | TAP |
+| Sord m5 | CAS (SORDM5) + BIN |
 | POTAS (Czechoslovak army computer) | BIN + TXT (EDIS texts, BASIC listings) |
 | ŠMS VÚVT Žilina (Kansas City 300 Bd) | BIN |
 | unrecognized sections | CSW (exact pulses) + WAV excerpt; platform can be set by hand |
